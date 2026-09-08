@@ -132,3 +132,7 @@ node scripts/harness-state.mjs enqueue
 ## 开源与隐私
 
 MIT。个人简历、聊天账本、历史日志、令牌和浏览器目录不在仓库。详见 [SECURITY.md](SECURITY.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 社区链接
+
+[Linux DO 社区](https://linux.do/)
