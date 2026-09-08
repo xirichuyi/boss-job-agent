@@ -1,0 +1,16 @@
+{
+  "search": {
+    "city": "杭州",
+    "cityCode": "101210100",
+    "minimumCompanySize": 500,
+    "nativeScaleCodes": [304, 305, 306],
+    "keywords": ["AI产品经理", "Go开发", "产品经理", "AI应用开发", "产品助理", "全栈开发", "后端开发", "AI Agent"],
+    "directions": "产品或开发岗，包括产品助理",
+    "ignoreEducationAndExperience": true
+  },
+  "schedule": { "intervalMinutes": 30, "dailyNewContactLimit": 70, "perRun": 3 },
+  "resumeFile": "resume.pdf",
+  "workflow": { "searchMinutes": 4, "replyMinutes": 7, "searchBatches": 2, "detailReadsPerBatch": 6, "inboxContactsPerRun": 50 },
+  "browser": { "cdpUrl": "http://127.0.0.1:9222", "publicUrl": "http://127.0.0.1:6080/vnc.html", "binary": "chromium", "vncPort": 5900, "webPort": 6080 },
+  "codex": { "binary": "codex", "timeoutMs": 120000 }
+}

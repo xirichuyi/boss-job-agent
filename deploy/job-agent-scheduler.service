@@ -1,0 +1,18 @@
+[Unit]
+Description=Codex job agent scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@ROOT@
+ExecStart=@PYTHON@ @ROOT@/scripts/scheduler.py
+Restart=always
+RestartSec=15
+KillMode=control-group
+TimeoutStopSec=15
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

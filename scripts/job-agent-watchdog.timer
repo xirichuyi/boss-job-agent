@@ -1,0 +1,11 @@
+[Unit]
+Description=Check job agent health every minute
+
+[Timer]
+OnBootSec=45
+OnUnitActiveSec=60
+AccuracySec=5
+Unit=job-agent-watchdog.service
+
+[Install]
+WantedBy=timers.target

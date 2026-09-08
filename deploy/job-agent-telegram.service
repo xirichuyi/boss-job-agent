@@ -1,0 +1,15 @@
+[Unit]
+Description=Job agent Telegram query bridge
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@ROOT@
+ExecStart=/usr/bin/flock -n @ROOT@/memory/telegram-chat.lock @NODE@ @ROOT@/scripts/telegram-chat.mjs
+Restart=on-failure
+RestartSec=15
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+node_modules/
+memory/
+backups/
+/candidate-profile.md
+/candidate-context.md
+*.env
+!*.env.example
+*.log
+*.sqlite*
+*.db
+*.pdf
+*.har
+__pycache__/
+*.pyc
+.DS_Store
+config/private*

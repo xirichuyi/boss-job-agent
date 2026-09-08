@@ -1,0 +1,13 @@
+{
+  "name": "boss-job-agent",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "python3 scripts/scheduler.py",
+    "init": "node scripts/init.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {}
+}

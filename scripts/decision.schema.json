@@ -1,0 +1,1 @@
+{"type":"object","properties":{"action":{"type":"string","enum":["contact","reply","skip"]},"reason":{"type":"string","description":"简短内部依据，不发送"},"message":{"type":"string","description":"给HR的本人聊天正文；skip时为空"}},"required":["action","reason","message"],"additionalProperties":false}

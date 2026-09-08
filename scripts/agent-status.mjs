@@ -1,0 +1,11 @@
+import { ROOT } from '../src/project-root.js';
+import { AGENT } from '../src/agent-config.js';
+import { MODEL, REASONING_EFFORT } from '../src/model-config.js';
+import { readState, harness } from '../src/harness-store.js';
+import fs from 'node:fs';
+import { cycleStatus } from '../src/schedule-state.js';
+import { serviceHealth, effectiveStatus } from '../src/service-health.js';
+const root = (ROOT + '/memory/');
+const read = name => { try { return readState(root + name); } catch(e) { if(e.code === 'ENOENT') return null; throw e; } };
+const service = serviceHealth();
+console.log(JSON.stringify({ service, configuration: { model: MODEL, reasoningEffort: REASONING_EFFORT, search: AGENT.search, schedule: AGENT.schedule }, schedule: read('schedule.json'), execution: effectiveStatus(cycleStatus(read('scheduled-cycle.json')), service), lastDispatch: read('scheduler-status.json'), watchdog: read('watchdog-state.json'), quota: read('contact-quota.json') }, null, 2));
