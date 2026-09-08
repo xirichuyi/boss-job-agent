@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 User=@USER@
 WorkingDirectory=@ROOT@
+Environment=NODE_BINARY=@NODE@
 ExecStart=@PYTHON@ @ROOT@/scripts/scheduler.py
 Restart=always
 RestartSec=15

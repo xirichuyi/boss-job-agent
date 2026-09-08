@@ -13,6 +13,7 @@ import time
 
 ROOT = Path(os.environ.get('BOSS_AGENT_ROOT', Path(__file__).resolve().parents[1]))
 MEMORY = ROOT / 'memory'
+NODE_BINARY = os.environ.get('NODE_BINARY', 'node')
 
 
 def atomic_json(path, value):
@@ -57,9 +58,9 @@ def tick(force=False):
             os.environ['JOB_AGENT_FORCE'] = '1'
         else:
             os.environ.pop('JOB_AGENT_FORCE', None)
-        code = run_worker(['node', 'scripts/scheduled-agent.mjs'])
+        code = run_worker([NODE_BINARY, 'scripts/scheduled-agent.mjs'])
         if code == 124:
-            subprocess.run(['node', 'scripts/harness-state.mjs', 'timeout'], cwd=ROOT, timeout=15, check=True)
+            subprocess.run([NODE_BINARY, 'scripts/harness-state.mjs', 'timeout'], cwd=ROOT, timeout=15, check=True)
             path = MEMORY / 'scheduled-cycle.json'
             cycle = json.loads(path.read_text()) if path.exists() else {}
             cycle.update(status='blocked', reason='worker_timeout_result_unconfirmed',
@@ -68,7 +69,7 @@ def tick(force=False):
             atomic_json(MEMORY / 'scheduler-status.json', {
                 'checkedAt': timestamp(), 'state': 'blocked',
                 'cycle': cycle.get('id'), 'reason': cycle['reason']})
-        subprocess.run(['node', 'scripts/telegram-notify.mjs'], cwd=ROOT,
+        subprocess.run([NODE_BINARY, 'scripts/telegram-notify.mjs'], cwd=ROOT,
                        stdin=subprocess.DEVNULL, timeout=75, check=False)
         return code
 
@@ -84,7 +85,7 @@ def main():
             result = tick(force=args.once)
             print(json.dumps({'at': timestamp(), 'tickResult': result}), flush=True)
         except Exception as error:
-            subprocess.run(['node', 'scripts/harness-state.mjs', 'error'], cwd=ROOT, timeout=15, check=False)
+            subprocess.run([NODE_BINARY, 'scripts/harness-state.mjs', 'error'], cwd=ROOT, timeout=15, check=False)
             atomic_json(MEMORY / 'scheduler-status.json', {
                 'checkedAt': timestamp(), 'state': 'error', 'reason': str(error)})
             print(str(error), flush=True)
