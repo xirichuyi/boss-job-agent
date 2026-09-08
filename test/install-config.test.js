@@ -24,6 +24,12 @@ test('clean install is disabled, repeat init cannot overwrite, disabled tick nee
   const tick = run('scheduled-agent.mjs'); assert.equal(tick.status, 0, tick.stderr);
   assert.match(tick.stdout, /disabled/);
   assert.notEqual(run('enable.mjs').status, 0);
+  assert.equal(run('harness-state.mjs').status, 1);
+  const timeout = spawnSync(process.execPath, [path.join(root, 'scripts/harness-state.mjs'), 'timeout'], { env, encoding:'utf8' });
+  assert.equal(timeout.status, 0, timeout.stderr);
+  const after = new DatabaseSync(path.join(dir, 'memory/harness.sqlite'));
+  const status = JSON.parse(after.prepare("SELECT value FROM documents WHERE key='scheduler-status.json'").get().value);
+  assert.equal(status.state, 'blocked'); after.close();
 });
 test('nondefault config controls prompts, policy, resume and model executable', t => {
   const dir = fixture(t), file = path.join(dir, 'agent.json');

@@ -12,6 +12,7 @@ const db = path.join(memory, 'harness.sqlite');
 // Never overwrite a live ledger or import an old account's state.
 if (fs.existsSync(db)) throw Error('已有数据库，初始化已拒绝：不会覆盖账本');
 if (fs.readdirSync(memory).some(f => f !== 'cycles') || fs.readdirSync(path.join(memory, 'cycles')).length) throw Error('memory 非空，请先核查旧状态；不要直接覆盖');
+fs.closeSync(fs.openSync(db, 'wx', 0o600)); // Atomic exclusion between competing installers.
 const store = new HarnessStore(db);
 try {
   store.batch([

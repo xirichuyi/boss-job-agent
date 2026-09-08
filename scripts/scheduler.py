@@ -61,14 +61,7 @@ def tick(force=False):
         code = run_worker([NODE_BINARY, 'scripts/scheduled-agent.mjs'])
         if code == 124:
             subprocess.run([NODE_BINARY, 'scripts/harness-state.mjs', 'timeout'], cwd=ROOT, timeout=15, check=True)
-            path = MEMORY / 'scheduled-cycle.json'
-            cycle = json.loads(path.read_text()) if path.exists() else {}
-            cycle.update(status='blocked', reason='worker_timeout_result_unconfirmed',
-                         completedAt=timestamp())
-            # Core cycle is already committed to Harness SQLite by harness-state.
-            atomic_json(MEMORY / 'scheduler-status.json', {
-                'checkedAt': timestamp(), 'state': 'blocked',
-                'cycle': cycle.get('id'), 'reason': cycle['reason']})
+            # Both cycle and scheduler status are committed in one SQLite transaction.
         subprocess.run([NODE_BINARY, 'scripts/telegram-notify.mjs'], cwd=ROOT,
                        stdin=subprocess.DEVNULL, timeout=75, check=False)
         return code
@@ -86,7 +79,8 @@ def main():
             print(json.dumps({'at': timestamp(), 'tickResult': result}), flush=True)
         except Exception as error:
             subprocess.run([NODE_BINARY, 'scripts/harness-state.mjs', 'error'], cwd=ROOT, timeout=15, check=False)
-            atomic_json(MEMORY / 'scheduler-status.json', {
+            # Non-core diagnostic only; never overwrite a core SQLite export.
+            atomic_json(MEMORY / 'scheduler-health-error.json', {
                 'checkedAt': timestamp(), 'state': 'error', 'reason': str(error)})
             print(str(error), flush=True)
             result = 1
