@@ -6,9 +6,11 @@ const [action] = process.argv.slice(2);
 if (action === 'timeout') {
   const cycle = readState(root + 'scheduled-cycle.json', {});
   const now = new Date().toISOString(), reason = 'worker_timeout_result_unconfirmed';
-  atomicBatch([
+  const status = { checkedAt: now, state: 'blocked', cycle: cycle.id || null, reason };
+  if (!cycle.id) atomicJson(root + 'scheduler-status.json', status);
+  else atomicBatch([
     [root + 'scheduled-cycle.json', { ...cycle, status: 'blocked', reason, completedAt: now }],
-    [root + 'scheduler-status.json', { checkedAt: now, state: 'blocked', cycle: cycle.id, reason }]
+    [root + 'scheduler-status.json', status]
   ]);
 } else if (action === 'error') {
   atomicJson(root + 'scheduler-status.json', { state: 'error', checkedAt: new Date().toISOString(), reason: 'Python supervisor error; inspect service journal' });
