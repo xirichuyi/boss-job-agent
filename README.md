@@ -4,6 +4,22 @@
 
 **实验性、自托管项目。默认不发送，不绕过扫码、人机验证或平台限制。不是 BOSS 官方项目，不保证持续可用、每天联系满额或获得面试。** 使用前确认平台规则与账号授权；只对相关岗位进行合理、个性化沟通，不用于群发骚扰。
 
+## 交给 Agent 安装的提示词
+
+复制以下内容给你自己的安装 Agent：
+
+```text
+请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、config 和 deploy 模板，并检查本机系统、Node/Python、Codex CLI 登录、模型权限以及已有服务；不要覆盖现有项目、数据库、浏览器用户目录或 systemd unit。
+
+先给出具体变更清单，再安装缺少的依赖。代码放在我确认的 /opt 工作目录；Chromium 用非 root 用户和独立用户目录。模型/推理强度只改 config/model.json；城市、城市代码、公司规模、关键词、频率、额度、附件名、CDP 和网页地址只改 config/agent.json，不写死进代码或提示词。读取我提供的真实资料到私密 candidate-profile.md；不要推测学历、经历、薪资或到岗承诺。密钥仅保存于 0600 的本地私密配置，不输出、不提交。
+
+运行 npm ci、Node/Python 测试和安全初始化。配置浏览器仅本地监听，通过 SSH 隧道或有身份认证的网关让我人工扫码；不绕过验证码，不关闭 Chromium sandbox，不直接暴露 CDP/VNC/noVNC。先做只读健康检查，核对原生筛选和平台附件文件名。
+
+默认保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或任何真实发送。不要为了测试消耗求职额度。Telegram 可选，只回复查询和推送人工验证提醒；验证私聊所有者后再绑定。
+
+授权后先用 perRun=1 验证一轮，区分文本沟通、回复与附件发送，以平台送达回执验收，不把 active/completed 当成已投递。随后安装审核过的 systemd 模板，配置最小权限并验证重启、暂停和状态查询。给我交付路径、配置清单、服务状态、实际测试结果、未验证项和恢复办法；不要声称已经实现绝对无人值守。
+```
+
 ## 工作方式
 
 ```text
@@ -112,22 +128,6 @@ node scripts/harness-state.mjs enqueue
 - 提示词不能保证模型永远准确；没有文案规则拦截或第二次审稿，使用者承担审核个人资料与观察输出的责任。
 - Codex 额度、网络、验证、账号限制都可能让任务暂停；没有自动切换其他付费模型。
 - 当前不是一键跨平台安装器，没有 Web 配置面板。systemd 最小权限需按部署环境配置。
-
-## 交给 Agent 安装的提示词
-
-复制以下内容给你自己的安装 Agent：
-
-```text
-请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、config 和 deploy 模板，并检查本机系统、Node/Python、Codex CLI 登录、模型权限以及已有服务；不要覆盖现有项目、数据库、浏览器用户目录或 systemd unit。
-
-先给出具体变更清单，再安装缺少的依赖。代码放在我确认的 /opt 工作目录；Chromium 用非 root 用户和独立用户目录。模型/推理强度只改 config/model.json；城市、城市代码、公司规模、关键词、频率、额度、附件名、CDP 和网页地址只改 config/agent.json，不写死进代码或提示词。读取我提供的真实资料到私密 candidate-profile.md；不要推测学历、经历、薪资或到岗承诺。密钥仅保存于 0600 的本地私密配置，不输出、不提交。
-
-运行 npm ci、Node/Python 测试和安全初始化。配置浏览器仅本地监听，通过 SSH 隧道或有身份认证的网关让我人工扫码；不绕过验证码，不关闭 Chromium sandbox，不直接暴露 CDP/VNC/noVNC。先做只读健康检查，核对原生筛选和平台附件文件名。
-
-默认保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或任何真实发送。不要为了测试消耗求职额度。Telegram 可选，只回复查询和推送人工验证提醒；验证私聊所有者后再绑定。
-
-授权后先用 perRun=1 验证一轮，区分文本沟通、回复与附件发送，以平台送达回执验收，不把 active/completed 当成已投递。随后安装审核过的 systemd 模板，配置最小权限并验证重启、暂停和状态查询。给我交付路径、配置清单、服务状态、实际测试结果、未验证项和恢复办法；不要声称已经实现绝对无人值守。
-```
 
 ## 开源与隐私
 
