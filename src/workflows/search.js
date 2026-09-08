@@ -14,16 +14,26 @@ export async function searchJobs({root, report, jobs, progress}) {
   atomicJson(cursorPath, { next: cursor.next + 1 });
   progress('read_native_filtered_jobs');
   let list = await jobs.listJobs();
-  report.searchPages = [{ visible: list.length }];
-  for (let page = 0; page < 2; page++) {
-    progress('load_more_jobs', { page: page + 2 });
-    if (!await jobs.loadMoreJobs()) { report.searchStop = '滚动后没有新增，未认定全站岗位耗尽'; break; }
-    list = await jobs.listJobs();
-    report.searchPages.push({ visible: list.length });
-  }
+  report.searchPages ||= [];
+  report.searchPages.push({ query: report.query, page: 1, visible: list.length });
+  report.currentSearchIds = list.map(j => j.id);
   report.listCount = (report.listCount || 0) + list.length;
   // Rotate the review start across cycles, retaining the same hard requirements.
-  const start = (Math.floor(cursor.next / queries.length) * 6) % Math.max(1, list.length);
+  const start = (Math.floor(cursor.next / queries.length) * AGENT.workflow.detailReadsPerBatch) % Math.max(1, list.length);
   list = [...list.slice(start), ...list.slice(0, start)];
   return list;
+}
+
+export async function nextSearchPage({report, jobs, progress}, page) {
+  progress('load_more_jobs', { page });
+  if (!await jobs.loadMoreJobs()) {
+    report.searchStop = '当前翻页未获得新岗位，不代表全站耗尽';
+    return [];
+  }
+  const visible = await jobs.listJobs(), seen = new Set(report.currentSearchIds || []);
+  const fresh = visible.filter(j => j.id && !seen.has(j.id));
+  report.currentSearchIds = [...new Set([...seen, ...fresh.map(j => j.id)])];
+  report.searchPages.push({ query: report.query, page, visible: visible.length, newJobs: fresh.length, method: jobs.lastPageMethod });
+  report.listCount += fresh.length;
+  return fresh;
 }

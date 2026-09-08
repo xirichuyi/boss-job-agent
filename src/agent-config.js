@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 const value = JSON.parse(fs.readFileSync(process.env.BOSS_AGENT_CONFIG || new URL('../config/agent.json', import.meta.url), 'utf8'));
 const s = value.search, c = value.schedule;
-for (const [key, max] of Object.entries({ searchMinutes: 4, replyMinutes: 7, searchBatches: 10, detailReadsPerBatch: 50, inboxContactsPerRun: 100 })) {
+for (const [key, max] of Object.entries({ searchMinutes: 4, replyMinutes: 7, searchBatches: 10, detailReadsPerBatch: 50, inboxContactsPerRun: 100, searchPages: 20, paginationWaitMs: 15000, reconcilePerRun: 20, conversationPages: 50 })) {
   if (!Number.isInteger(value.workflow?.[key]) || value.workflow[key] < 1 || value.workflow[key] > max) throw Error('工作流预算无效：' + key);
 }
 if (!s || !s.city || !/^\d+$/.test(s.cityCode) || !Number.isInteger(s.minimumCompanySize) || s.minimumCompanySize < 1 || !Array.isArray(s.keywords) || !s.keywords.length || s.keywords.some(x => typeof x !== 'string' || !x.trim()) || !s.directions || typeof s.ignoreEducationAndExperience !== 'boolean') throw Error('搜索配置无效');

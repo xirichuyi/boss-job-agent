@@ -6,11 +6,26 @@ import { atomicJson } from '../schedule-state.js';
 import { selectInboxBatch, classifyFailure } from '../autonomy.js';
 import { raiseAlert } from '../alerts.js';
 import { conversationState, RESUME_FILE } from './conversation-policy.js';
+import { pendingWrite } from './reconcile.js';
 export async function checkInbox({root, ledger, report, chat, decide, progress, save, assertAuthority, deadline = Infinity}) {
-  // Existing verified contacts only. No responding to unknown-company inboxes.
+  // Discover unread rows, but only send to identity/JD-verified ledger contacts.
   const inboxPath = root + '/memory/inbox-cursor.json';
   const inbox = readState(inboxPath, { next: 0 });
   const batch = selectInboxBatch(ledger.contacts, inbox.next, AGENT.workflow.inboxContactsPerRun);
+  if (chat.scanConversations && Date.now() < deadline) {
+    try {
+      const discovery = await chat.scanConversations({deadline});
+      const matches = (row, entry) => row.recruiter === entry.job.recruiter && row.label.includes(entry.job.company);
+      const unread = discovery.rows.filter(r => r.unread);
+      batch.entries.sort((a,b) => Number(unread.some(r=>matches(r,b))) - Number(unread.some(r=>matches(r,a))));
+      const unverified = unread.filter(row => !ledger.contacts.some(e => matches(row,e)));
+      report.inboxDiscovery = { scanned: discovery.rows.length, unread: unread.length, unverified: unverified.length, reachedRenderedEnd: discovery.complete };
+      atomicJson(root + '/memory/inbox-discovery.json', { capturedAt:new Date().toISOString(), ...report.inboxDiscovery, unverified, action:'需核实联系人身份、JD和求职条件后才能纳入自动回复；本次未发送' });
+    } catch (error) {
+      if (classifyFailure(error.message) === 'authentication') throw error;
+      report.inboxDiscovery = { error:error.message };
+    }
+  }
   let processed = 0;
   report.historyChecks = [];
   report.inboxSummary = { checked: 0, noNewMessage: 0, alreadyHandled: 0, pending: 0, readFailed: 0 };
@@ -40,8 +55,8 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
       const intent = { kind: 'attachment', jobId: entry.job.id, filename: RESUME_FILE, status: 'prepared', at: new Date().toISOString() };
       report.intents.push(intent); save();
       progress('send_requested_resume', { company: entry.job.company });
-      const receipt = await chat.sendResume(entry.job, RESUME_FILE, history, () => { assertAuthority(); intent.status = 'outcome_unknown'; entry.status = 'outcome_unknown'; save(); });
-      intent.status = 'delivered'; entry.status = 'delivered'; entry.platformAttachment = receipt; delete entry.pendingUser;
+      const receipt = await chat.sendResume(entry.job, RESUME_FILE, history, () => { assertAuthority(); intent.status = 'outcome_unknown'; entry.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('attachment', history, { filename: RESUME_FILE }); save(); });
+      intent.status = 'delivered'; entry.status = 'delivered'; entry.platformAttachment = receipt; delete entry.pendingUser; delete entry.pendingWrite;
       report.receipts.push(receipt); report.result.attachmentsSent++; report.result.messagesSent++; save();
       continue;
     }
@@ -59,8 +74,8 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
     }
     const intent = { kind: 'reply', jobId: entry.job.id, message: decision.message, at: new Date().toISOString(), status: 'prepared' };
     report.intents.push(intent); save();
-    const receipt = await chat.sendText(entry.job, decision.message, history, () => { assertAuthority(); intent.status = 'outcome_unknown'; entry.status = 'outcome_unknown'; save(); });
-    intent.status = 'delivered'; entry.status = 'delivered'; entry.lastHandledHistory = hash;
+    const receipt = await chat.sendText(entry.job, decision.message, history, () => { assertAuthority(); intent.status = 'outcome_unknown'; entry.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('text', history, { message: decision.message }); save(); });
+    intent.status = 'delivered'; entry.status = 'delivered'; entry.lastHandledHistory = hash; delete entry.pendingWrite;
     report.receipts.push(receipt); report.result.messagesSent++; report.result.repliesSent++; save();
   }
   const eligible = ledger.contacts.filter(e => e.status === 'delivered').length;

@@ -1,5 +1,6 @@
 import { shanghaiDay } from '../schedule-state.js';
 import { AGENT } from '../agent-config.js';
+import { pendingWrite } from './reconcile.js';
 import { hardReject } from '../job-policy.js';
 import { classifyFailure } from '../autonomy.js';
 export async function contactJobs({list, cycle, ledger, report, jobs, chat, decide, progress, save, assertAuthority, deadline = Infinity}) {
@@ -66,8 +67,8 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     const supplement = { kind: 'targeted_message', jobId: job.id, message: decision.message, status: 'prepared' };
     report.intents.push(supplement); save();
     progress('send_targeted_message', { company: job.company, recruiter: job.recruiter });
-    const receipt = await chat.sendText(job, decision.message, conversation, () => { assertAuthority(); supplement.status = 'outcome_unknown'; save(); });
-    supplement.status = 'delivered'; entry.status = 'delivered'; entry.receipt = receipt;
+    const receipt = await chat.sendText(job, decision.message, conversation, () => { assertAuthority(); supplement.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('text', conversation, { message: decision.message }); save(); });
+    supplement.status = 'delivered'; entry.status = 'delivered'; entry.receipt = receipt; delete entry.pendingWrite;
     report.receipts.push(receipt); report.result.messagesSent++; save();
   }
 }

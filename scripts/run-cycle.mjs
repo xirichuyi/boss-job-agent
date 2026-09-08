@@ -2,7 +2,8 @@ import { ROOT } from '../src/project-root.js';
 import { AGENT } from '../src/agent-config.js';
 import { createDecision } from '../src/workflows/decision.js';
 import { checkInbox } from '../src/workflows/inbox.js';
-import { searchJobs } from '../src/workflows/search.js';
+import { reconcileUnknown } from '../src/workflows/reconcile.js';
+import { searchJobs, nextSearchPage } from '../src/workflows/search.js';
 import { contactJobs } from '../src/workflows/outreach.js';
 import { summarizeCycle } from '../src/workflows/summary.js';
 import { readState, harness } from '../src/harness-store.js';
@@ -43,8 +44,12 @@ try {
   try {
     const searchDeadline = Date.now() + AGENT.workflow.searchMinutes * 60000;
     for (let batch = 0; batch < AGENT.workflow.searchBatches && Date.now() < searchDeadline; batch++) {
-      const list = await searchJobs(context);
-      await contactJobs({ ...context, list, deadline: searchDeadline });
+      let list = await searchJobs(context);
+      for (let page = 1; page <= AGENT.workflow.searchPages && list.length; page++) {
+        await contactJobs({ ...context, list, deadline: searchDeadline });
+        if (report.result.newContacts >= cycle.newContactAllocation || Date.now() >= searchDeadline || page === AGENT.workflow.searchPages) break;
+        list = await nextSearchPage(context, page + 1);
+      }
       if (report.result.newContacts >= cycle.newContactAllocation) break;
     }
   } catch (error) {
@@ -52,7 +57,9 @@ try {
     if (classifyFailure(error.message) !== 'transient' || report.intents.some(i => !['delivered', 'platform_greeting_delivered'].includes(i.status))) throw error;
     report.searchWarning = error.message; save(); // Read-only search failure must not starve replies.
   }
-  await checkInbox({ ...context, deadline: Date.now() + AGENT.workflow.replyMinutes * 60000 });
+  const replyDeadline = Date.now() + AGENT.workflow.replyMinutes * 60000;
+  await reconcileUnknown({ ...context, deadline: replyDeadline });
+  await checkInbox({ ...context, deadline: replyDeadline });
   report.status = 'completed';
 } catch (error) { report.status = 'blocked'; report.reason = error.message; process.exitCode = 1; }
 finally {

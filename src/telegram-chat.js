@@ -27,6 +27,7 @@ export function snapshot(root) {
   const report = id ? readJson(`${root}/memory/cycles/${id}.json`, {}) : {};
   const contacts = readJson(root + '/memory/outreach-ledger.json', { contacts: [] }).contacts;
   return { capturedAt: new Date().toISOString(), model: MODEL, reasoningEffort: REASONING_EFFORT, status, service,
+    inboxDiscovery: readJson(root + '/memory/inbox-discovery.json', null), reconciliation: report.reconciliation,
     cycle: { id: cycle.id, status: cycle.status, at: cycle.at, result: cycle.result, reason: cycle.reason, summary: cycle.summary },
     reviews: (report.jobReviews || []).map(j => ({ company: j.company, title: j.title, rejected: j.rejected, decision: j.decision })),
     contacts: contacts.map(e => ({ company: e.job.company, title: e.job.title, status: e.status, pendingUser: e.pendingUser,

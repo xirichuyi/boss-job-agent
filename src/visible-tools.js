@@ -1,4 +1,5 @@
 import { AGENT } from './agent-config.js';
+import { jobIdsExpression, advanceJobsExpression, hasNewIds } from './ui-pagination.js';
 import { BossTools } from './boss-tools.js';
 import { parseCompanySize } from './ranker.js';
 import { validateOutwardMessage } from './job-policy.js';
@@ -126,13 +127,15 @@ export class VisibleTools extends BossTools {
   }
   async loadMoreJobs() {
     await this.guard();
-    const before = await this.evaluate(`document.querySelectorAll('.job-card-wrap').length`);
-    await this.evaluate(`(()=>{window.scrollTo(0,document.scrollingElement.scrollHeight);return true})()`);
-    for (let attempt = 0; attempt < 16; attempt++) {
+    const before = await this.evaluate(jobIdsExpression);
+    this.lastPageMethod = await this.evaluate(advanceJobsExpression);
+    if (['missing_list', 'no_control'].includes(this.lastPageMethod)) return false;
+    const deadline = Date.now() + AGENT.workflow.paginationWaitMs;
+    while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 500));
       await this.guard();
       if (this.evidenceError) throw Error(this.evidenceError);
-      if (await this.evaluate(`document.querySelectorAll('.job-card-wrap').length>${before}`)) return true;
+      if (hasNewIds(before, await this.evaluate(jobIdsExpression))) return true;
     }
     return false; // No growth is not proof that the platform has no more jobs.
   }
@@ -196,9 +199,24 @@ export class VisibleTools extends BossTools {
   async clearSearch() {
     await this.evaluate(`(()=>{document.querySelector('.boss-search-container .close')?.click();return true})()`);
   }
+  async scanConversations({deadline = Infinity, findJob = null} = {}) {
+    await this.clearSearch(); await this.guard();
+    await this.evaluate(`(()=>{const e=document.querySelector('.user-list-content');if(!e)throw Error('联系人滚动容器未就绪');e.scrollTop=0;return true})()`);
+    const seen = new Map(); let atEnd = false;
+    for (let page = 0; page < AGENT.workflow.conversationPages && Date.now() < deadline; page++) {
+      await new Promise(r => setTimeout(r, 500)); await this.guard();
+      const rows = await this.evaluate(`[...document.querySelectorAll('li[role="listitem"]')].map(e=>({label:e.querySelector('.name-box')?.innerText||'',recruiter:e.querySelector('.name-text')?.textContent.trim(),unread:!!e.querySelector('.notice-badge')})).filter(e=>e.label&&e.recruiter)`);
+      for (const row of rows) seen.set(row.label, row);
+      if (findJob && rows.some(r => r.recruiter === findJob.recruiter && r.label.includes(findJob.company))) return { rows: [...seen.values()], found: true, complete: false };
+      const moved = await this.evaluate(`(()=>{const e=document.querySelector('.user-list-content');if(!e)throw Error('联系人滚动容器消失');if(e.scrollTop+e.clientHeight>=e.scrollHeight-2)return false;e.scrollTop+=Math.max(1,e.clientHeight*0.8);return true})()`);
+      if (!moved) { atEnd = true; break; }
+    }
+    return { rows: [...seen.values()], found: false, complete: atEnd };
+  }
   async openConversation(job) {
     await this.clearSearch();
     const expression = `(()=>{const matches=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>{const n=e.querySelector('.name-box');return n&&n.innerText.includes(${JSON.stringify(job.company)})&&n.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)}});if(matches.length!==1)return null;return matches[0].innerText})()`;
+    if (!await this.evaluate(expression)) await this.scanConversations({findJob:job, deadline:Date.now()+AGENT.workflow.paginationWaitMs});
     await this.until(expression, 25000);
     await this.evaluate(`(()=>{const e=[...document.querySelectorAll('li[role="listitem"]')].find(e=>e.querySelector('.name-box')?.innerText.includes(${JSON.stringify(job.company)})&&e.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)});e.querySelector('.friend-content').click();return true})()`);
     return this.until(`(()=>{const c=document.querySelector('.chat-conversation');if(!c||!c.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)})||!c.innerText.includes(${JSON.stringify(job.title)}))return null;return {text:c.innerText,messages:[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))}})()`);
