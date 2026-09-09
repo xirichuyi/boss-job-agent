@@ -3,13 +3,13 @@ import { AGENT } from '../agent-config.js';
 import { pendingWrite } from './reconcile.js';
 import { hardReject } from '../job-policy.js';
 import { classifyFailure } from '../autonomy.js';
-export async function contactJobs({list, cycle, ledger, report, jobs, chat, decide, progress, save, assertAuthority, deadline = Infinity}) {
+export async function contactJobs({list, cycle, ledger, report, jobs, chat, decide, progress, save, assertAuthority, withChat = task => task(), deadline = Infinity}) {
   const priorDetails = report.jobReviews.filter(j => j.text).length;
   const candidates = [];
   const batchLimit = Math.min(3, cycle.newContactAllocation - report.result.newContacts);
   if (batchLimit <= 0) return;
   for (const card of list) {
-    if (Date.now() >= deadline) { report.searchStop = '达到本轮搜索时长，转入回复阶段'; break; }
+    if (Date.now() >= deadline) { report.searchStop = '达到本轮搜索时长，结束搜索分支'; break; }
     if (candidates.length >= batchLimit) break;
     if (candidates.some(x => x.job.company === card.company)) { report.jobReviews.push({ ...card, rejected: '本批次同公司去重' }); save(); continue; }
     if (ledger.contacts.some(e => e.job.id === card.id || e.job.company === card.company)) {
@@ -38,7 +38,7 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     candidates.push({ job, history });
   }
   if (!candidates.length || Date.now() >= deadline) return;
-  const decisions = decide.batch ? decide.batch(candidates) : candidates.map(({ job, history }) => decide(job, history, 'contact'));
+  const decisions = decide.batch ? await decide.batch(candidates) : await Promise.all(candidates.map(({ job, history }) => decide(job, history, 'contact')));
   for (let i = 0; i < candidates.length; i++) {
     if (Date.now() >= deadline || report.result.newContacts >= cycle.newContactAllocation) break;
     const { job } = candidates[i], decision = decisions[i];
@@ -53,8 +53,10 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     if (!await jobs.contactReady(job)) {
       job.rejected = '平台沟通按钮不可用，未点击；后续轮次可重新检查'; save(); continue;
     }
-    if (!(await chat.searchHistory(job.company)).empty) { job.rejected = '发送前平台已有公司联系人，未发送'; save(); continue; }
-    if (shanghaiDay() !== shanghaiDay(new Date(cycle.at))) break; // Next day must reserve its own quota.
+    await withChat(async () => {
+    if (Date.now() >= deadline) return;
+    if (!(await chat.searchHistory(job.company)).empty) { job.rejected = '发送前平台已有公司联系人，未发送'; save(); return; }
+    if (shanghaiDay() !== shanghaiDay(new Date(cycle.at))) return; // Next day must reserve its own quota.
     assertAuthority();
     const intent = { kind: 'first_contact', jobId: job.id, company: job.company, recruiter: job.recruiter, message: decision.message, at: new Date().toISOString(), status: 'outcome_unknown' };
     const entry = { job, status: 'outcome_unknown', cycle: cycle.id, intent };
@@ -72,5 +74,6 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     const receipt = await chat.sendText(job, decision.message, conversation, () => { assertAuthority(); supplement.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('text', conversation, { message: decision.message }); save(); });
     supplement.status = 'delivered'; entry.status = 'delivered'; entry.receipt = receipt; delete entry.pendingWrite;
     report.receipts.push(receipt); report.result.messagesSent++; save();
+    });
   }
 }

@@ -3,13 +3,18 @@ import { jobIdsExpression, advanceJobsExpression, hasNewIds } from './ui-paginat
 import { BossTools } from './boss-tools.js';
 import { parseCompanySize } from './ranker.js';
 import { validateOutwardMessage } from './job-policy.js';
+import { nativeFiltersForSearch, searchRequestFilters, searchCities, loadJobFilters } from './job-filters.js';
 
 export class VisibleTools extends BossTools {
   async observeNativeResponses() {
     if (this.observing) return;
     this.observing = true; this.listProofs = new Map(); this.detailProofs = new Map();
     const pending = new Map();
+    const requests = new Map();
     this.onEvent = event => {
+      if (event.method === 'Network.requestWillBeSent' && new URL(event.params.request.url).pathname === '/wapi/zpgeek/search/joblist.json') {
+        requests.set(event.params.requestId, searchRequestFilters(event.params.request));
+      }
       if (event.method === 'Network.responseReceived') {
         const path = new URL(event.params.response.url).pathname;
         if (['/wapi/zpgeek/search/joblist.json', '/wapi/zpgeek/job/detail.json'].includes(path)) pending.set(event.params.requestId, path);
@@ -20,6 +25,9 @@ export class VisibleTools extends BossTools {
           const body = JSON.parse(result.base64Encoded ? Buffer.from(result.body, 'base64').toString() : result.body);
           if (body.code !== 0) { this.evidenceError = 'BOSS业务错误 ' + body.code; return; }
           if (path.endsWith('joblist.json')) {
+            const filters = requests.get(id); requests.delete(id);
+            if (this.expectedFilters && !Object.entries(this.expectedFilters).every(([k,v]) => filters?.[k] === v)) return;
+            this.searchResponse = { filters, count: (body.zpData?.jobList || []).length };
             for (const j of body.zpData?.jobList || []) this.listProofs.set(j.encryptJobId, {
               id: j.encryptJobId, companySize: j.brandScaleName, company: j.brandName,
               location: [j.cityName, j.areaDistrict, j.businessDistrict].filter(Boolean).join('·'), salary: j.salaryDesc,
@@ -94,6 +102,7 @@ export class VisibleTools extends BossTools {
   async listJobs() {
     await this.selectHangzhou();
     await this.filterCompanies();
+    if (this.searchResponse?.count === 0) return [];
     const cards = await this.until(`(()=>{const cards=[...document.querySelectorAll('.job-card-wrap')];return cards.length?cards.map(e=>({
       id:e.querySelector('.job-name')?.getAttribute('href')?.split('/job_detail/')[1]?.split('.html')[0],
       title:e.querySelector('.job-name')?.textContent.trim(),company:e.querySelector('.boss-name')?.textContent.trim(),
@@ -110,9 +119,33 @@ export class VisibleTools extends BossTools {
       return { ...c, ...proof, scaleEvidence: size && size.minimum >= AGENT.search.minimumCompanySize ? '原生筛选+当前岗位响应规模核对' : '' };
     });
   }
-  async searchKeyword(query) {
+  async applyNativeFilters(filters) {
+    for (const key of ['salary', 'jobType', 'experience', 'degree']) {
+      const code = filters[key] || '0';
+      const domKey = key === 'experience' ? 'exp' : key;
+      await this.evaluate(`(()=>{
+        const e=document.querySelector('[ka="sel-job-rec-${domKey}-${code}"]');
+        if(!e)throw Error('原生筛选控件缺失');
+        const others=[...document.querySelectorAll('[ka^="sel-job-rec-${domKey}-"].active')].filter(n=>n!==e);
+        if(${code === '0'} ? others.length : !e.classList.contains('active'))e.click();
+        return true;
+      })()`);
+      await this.until(code === '0'
+        ? `![...document.querySelectorAll('[ka^="sel-job-rec-${domKey}-"].active')].some(e=>e.getAttribute('ka')!=='sel-job-rec-${domKey}-0')`
+        : `document.querySelector('[ka="sel-job-rec-${domKey}-${code}"]')?.classList.contains('active')`);
+    }
+  }
+  async searchKeyword(query, filters = nativeFiltersForSearch(0, 1), city = searchCities()[0]) {
     if (typeof query !== 'string' || !query.trim() || query.length > 40) throw new Error('搜索词无效');
     await this.guard();
+    this.searchCity = city;
+    this.expectedFilters = { ...filters, query, city: city.code, scale: AGENT.search.nativeScaleCodes.join(',') };
+    this.searchResponse = null;
+    this.evidenceError = null;
+    this.listProofs.clear();
+    await this.selectHangzhou();
+    await this.filterCompanies();
+    await this.applyNativeFilters(filters);
     await this.evaluate(`(()=>{
       const cancel=[...document.querySelectorAll('.cancel-btn')].find(e=>e.textContent.trim()==='留在此页');cancel?.click();
       const e=document.querySelector('input[placeholder="搜索职位、公司"]');
@@ -121,7 +154,12 @@ export class VisibleTools extends BossTools {
       e.dispatchEvent(new Event('input',{bubbles:true}));button.click();return true;
     })()`);
     await new Promise(r => setTimeout(r, 1500));
-    await this.until(`document.querySelector('.job-card-wrap')?true:null`);
+    for (let n = 0; n < 30 && !this.searchResponse; n++) {
+      await this.guard();
+      if (this.evidenceError) throw Error(this.evidenceError);
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (!this.searchResponse) throw Error('未收到匹配筛选参数的岗位接口响应');
     await this.selectHangzhou();
     return this.filterCompanies();
   }
@@ -139,14 +177,26 @@ export class VisibleTools extends BossTools {
     }
     return false; // No growth is not proof that the platform has no more jobs.
   }
-  async selectHangzhou() {
+  async selectHangzhou() { // Compatibility name; selection is configuration-driven.
+    const city = this.searchCity || searchCities()[0];
     const current = await this.evaluate(`document.querySelector('.cur-city-label')?.textContent.trim()`);
-    if (current === AGENT.search.city) return;
-    await this.evaluate(`(()=>{const c=document.querySelector('.city-label');if(!c)throw Error('城市筛选不可用');c.click();return true})()`);
-    await this.until(`document.querySelector('.city-select-wrapper .city-list-hot')?true:null`);
-    await this.evaluate(`(()=>{const e=[...document.querySelectorAll('.city-select-wrapper .city-list-hot li')].find(e=>e.textContent.trim()===${JSON.stringify(AGENT.search.city)}&&e.getBoundingClientRect().width);if(!e)throw Error('原生目标城市选项不可用');e.click();return true})()`);
-    await this.until(`document.querySelector('.cur-city-label')?.textContent.trim()===${JSON.stringify(AGENT.search.city)}?true:null`);
-    await new Promise(r => setTimeout(r, 1000));
+    if (current === city.name) return;
+    await this.guard();
+    await this.evaluate(`(()=>{if(!document.querySelector('.city-select-wrapper'))document.querySelector('.city-label')?.click();return true})()`);
+    await this.until(`!!document.querySelector('.city-select-wrapper')`);
+    const choose = `(()=>{const e=[...document.querySelectorAll('.city-list-hot li,.list-select-list a')].find(e=>e.textContent.trim()===${JSON.stringify(city.name)}&&e.getBoundingClientRect().width);if(!e)return false;e.click();return true})()`;
+    let selected = await this.evaluate(choose);
+    if (!selected) {
+      const groups = await this.evaluate(`[...document.querySelectorAll('.city-char-list li')].map(e=>e.textContent.trim())`);
+      for (const group of groups) {
+        await this.evaluate(`(()=>{[...document.querySelectorAll('.city-char-list li')].find(e=>e.textContent.trim()===${JSON.stringify(group)})?.click();return true})()`);
+        await new Promise(r=>setTimeout(r,150));
+        if (await this.evaluate(choose)) { selected=true; break; }
+      }
+    }
+    if (!selected) throw Error('原生城市选项不可用：'+city.name);
+    await this.until(`document.querySelector('.cur-city-label')?.textContent.trim()===${JSON.stringify(city.name)}`);
+    await new Promise(r=>setTimeout(r,1000));
   }
   async detail(id) {
     if (!/^[a-zA-Z0-9_-]+$/.test(id || '')) throw new Error('岗位ID无效');
@@ -203,7 +253,7 @@ export class VisibleTools extends BossTools {
     await this.clearSearch(); await this.guard();
     await this.evaluate(`(()=>{const e=document.querySelector('.user-list-content');if(!e)throw Error('联系人滚动容器未就绪');e.scrollTop=0;return true})()`);
     const seen = new Map(); let atEnd = false;
-    for (let page = 0; page < AGENT.workflow.conversationPages && Date.now() < deadline; page++) {
+    for (let page = 0; page < loadJobFilters().conversationPages && Date.now() < deadline; page++) {
       await new Promise(r => setTimeout(r, 500)); await this.guard();
       const rows = await this.evaluate(`[...document.querySelectorAll('li[role="listitem"]')].map(e=>({label:e.querySelector('.name-box')?.innerText||'',recruiter:e.querySelector('.name-text')?.textContent.trim(),unread:!!e.querySelector('.notice-badge')})).filter(e=>e.label&&e.recruiter)`);
       for (const row of rows) seen.set(row.label, row);
@@ -216,7 +266,7 @@ export class VisibleTools extends BossTools {
   async openConversation(job) {
     await this.clearSearch();
     const expression = `(()=>{const matches=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>{const n=e.querySelector('.name-box');return n&&n.innerText.includes(${JSON.stringify(job.company)})&&n.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)}});if(matches.length!==1)return null;return matches[0].innerText})()`;
-    if (!await this.evaluate(expression)) await this.scanConversations({findJob:job, deadline:Date.now()+AGENT.workflow.paginationWaitMs});
+    if (!await this.evaluate(expression)) await this.scanConversations({findJob:job, deadline:Date.now()+loadJobFilters().conversationLookupMs});
     await this.until(expression, 25000);
     await this.evaluate(`(()=>{const e=[...document.querySelectorAll('li[role="listitem"]')].find(e=>e.querySelector('.name-box')?.innerText.includes(${JSON.stringify(job.company)})&&e.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)});e.querySelector('.friend-content').click();return true})()`);
     return this.until(`(()=>{const c=document.querySelector('.chat-conversation');if(!c||!c.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)})||!c.innerText.includes(${JSON.stringify(job.title)}))return null;return {text:c.innerText,messages:[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))}})()`);

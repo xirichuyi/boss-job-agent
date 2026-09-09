@@ -37,6 +37,10 @@ test('nondefault config controls prompts, policy, resume and model executable', 
   config.search.city = '上海'; config.search.cityCode = '101020100';
   config.resumeFile = 'custom.pdf'; config.codex.binary = '/test/custom-codex';
   fs.writeFileSync(file, JSON.stringify(config));
+  const filtersFile=path.join(dir,'job-filters.json');
+  const filters=JSON.parse(fs.readFileSync(path.join(root,'config/job-filters.json')));
+  filters.cities=[{name:'上海',code:'101020100'}];
+  fs.writeFileSync(filtersFile,JSON.stringify(filters));
   const program = `
     import { AGENT } from './src/agent-config.js';
     import { hardReject } from './src/job-policy.js';
@@ -45,7 +49,7 @@ test('nondefault config controls prompts, policy, resume and model executable', 
     import { callCodex, MODEL } from './src/codex-adapter.js';
     const bin=callCodex(['-m',MODEL,'read-only'],{},bin=>bin);
     console.log(JSON.stringify({ city:AGENT.search.city, rejected:hardReject({location:'杭州',scaleEvidence:'yes'}), resume:RESUME_FILE, bin, prompt:buildPrompt('contact',{}).text }));`;
-  const r = spawnSync(process.execPath, ['--input-type=module','-e', program], { cwd: root, env: { ...process.env, BOSS_AGENT_CONFIG: file }, encoding: 'utf8' });
+  const r = spawnSync(process.execPath, ['--input-type=module','-e', program], { cwd: root, env: { ...process.env, BOSS_AGENT_CONFIG: file, BOSS_JOB_FILTERS_CONFIG:filtersFile }, encoding: 'utf8' });
   assert.equal(r.status, 0, r.stderr); const value = JSON.parse(r.stdout);
   assert.equal(value.city, '上海'); assert.ok(value.rejected); assert.equal(value.resume, 'custom.pdf');
   assert.equal(value.bin, '/test/custom-codex'); assert.match(value.prompt, /101020100/);

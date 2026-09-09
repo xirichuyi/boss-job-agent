@@ -1,16 +1,20 @@
 import { AGENT } from '../agent-config.js';
 import { readState } from '../harness-store.js';
 import { atomicJson } from '../schedule-state.js';
+import { searchSlot } from '../job-filters.js';
 export async function searchJobs({root, report, jobs, progress}) {
   const cursorPath = root + '/memory/search-cursor.json';
   const cursor = readState(cursorPath, { next: 0 });
   const queries = AGENT.search.keywords;
   if (!Number.isInteger(cursor.next) || cursor.next < 0) throw new Error('搜索游标无效');
-  report.query = queries[cursor.next % queries.length];
+  const slot = searchSlot(cursor.next, queries.length);
+  report.query = queries[slot.keywordIndex];
+  report.searchCity = slot.city;
   report.queries ||= [];
   report.queries.push(report.query);
   progress('native_keyword_search', { query: report.query });
-  await jobs.searchKeyword(report.query);
+  report.nativeFilters = slot.filters;
+  await jobs.searchKeyword(report.query, report.nativeFilters, slot.city);
   atomicJson(cursorPath, { next: cursor.next + 1 });
   progress('read_native_filtered_jobs');
   let list = await jobs.listJobs();
