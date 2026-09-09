@@ -47,6 +47,8 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     if (ledger.contacts.some(e => e.job.id === job.id || e.job.company === job.company)) { job.rejected = '发送前同公司去重'; save(); continue; }
     // Revalidate selected JD immediately before a write; never navigate by guessed URL.
     const current = await jobs.detail(job.id);
+    const freshRejection = hardReject({ ...job, ...current });
+    if (freshRejection) { job.rejected = freshRejection; save(); continue; }
     if (current.text.split('职位描述')[1]?.split(job.recruiter)[0] !== job.text.split('职位描述')[1]?.split(job.recruiter)[0]) throw new Error('发送前JD变化，需要重新匹配');
     if (!await jobs.contactReady(job)) {
       job.rejected = '平台沟通按钮不可用，未点击；后续轮次可重新检查'; save(); continue;

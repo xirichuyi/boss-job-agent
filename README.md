@@ -39,6 +39,7 @@ Python 定时器 / 手动请求 / Telegram /run
 | 文件 | 用途 |
 | --- | --- |
 | `config/model.json` | Codex 模型、推理强度；默认 `gpt-5.6-luna` / `high`，需要账号有调用权限 |
+| `config/job-filters.json` | 月薪下限、是否排除实习岗；默认月薪区间下限至少11K、排除实习，日薪/时薪/面议跳过；新联系和已有会话自动回复均生效 |
 | `config/agent.json` | 城市及平台城市编码、人数下限及原生规模档位、关键词、岗位方向、学历年限策略、调度额度、工作流预算、附件名、CDP/网页地址、Codex 路径与超时 |
 | `candidate-profile.md` | 本人的真实经历，私密、不入库到 Git |
 | `memory/telegram-secrets.json` | 可选 Telegram token，私密、不进 Git |

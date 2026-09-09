@@ -16,7 +16,7 @@ export function profileContext(root) {
     : { source: 'local_only', text: local };
 }
 export function jobContext(job) {
-  return { id: job.id, title: job.title, company: job.company, location: job.location,
+  return { id: job.id, title: job.title, company: job.company, location: job.location, salary: job.proof?.salary || job.salary,
     companySize: job.companySize || job.proof?.companySize, scaleEvidence: job.scaleEvidence,
     requirements: job.requirements, description: job.proof?.description || job.text || '' };
 }

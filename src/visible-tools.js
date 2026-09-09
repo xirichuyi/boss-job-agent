@@ -27,7 +27,7 @@ export class VisibleTools extends BossTools {
           } else {
             const d = body.zpData, j = d?.jobInfo;
             if (j?.encryptId) this.detailProofs.set(j.encryptId, {
-              id: j.encryptId, title: j.jobName, description: j.postDescription,
+              id: j.encryptId, title: j.jobName, description: j.postDescription, salary: j.salaryDesc,
               company: d.brandComInfo?.brandName, companySize: d.brandComInfo?.scaleName,
               recruiter: d.bossInfo?.name, identity: `${d.bossInfo?.brandName} · ${d.bossInfo?.title}`,
               location: j.locationName, receivedAt: new Date().toISOString(),

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { rejectJobFilters } from '../job-filters.js';
 import { AGENT } from '../agent-config.js';
 import { createHash } from 'node:crypto';
 import { readState } from '../harness-store.js';
@@ -32,6 +33,8 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
   for (const entry of batch.entries) {
     if (Date.now() >= deadline) { report.inboxDeferred = true; break; }
     processed++;
+    const excluded = rejectJobFilters(entry.job);
+    if (excluded) { entry.pendingUser = excluded; report.inboxSummary.excluded = (report.inboxSummary.excluded || 0) + 1; save(); continue; }
     progress('check_existing_history', { company: entry.job.company });
     const history = await chat.openConversation(entry.job).catch(error => {
       report.historyChecks.push({ jobId: entry.job.id, status: 'failed', reason: error.message });

@@ -9,7 +9,7 @@ function context() {
 }
 test('AI greeting is sent verbatim, without a code-generated prefix or suffix', async () => {
   const c = context();
-  const job = { id: 'job', company: 'company', title: 'AI产品', location: '杭州', scaleEvidence: 'native', recruiter: 'HR' };
+  const job = { id: 'job', company: 'company', title: 'AI产品', location: '杭州', salary: '11-20K', scaleEvidence: 'native', recruiter: 'HR' };
   const message = '您好，我对这个方向挺感兴趣，之前做过企业知识库项目，方便聊聊吗？';
   c.list = [job];
   c.jobs.detail = async () => ({ text: '职位描述需求梳理HR', buttons: [{ text: '立即沟通' }] });
@@ -31,7 +31,7 @@ test('duplicate company is audited and never reaches browser writes', async () =
 });
 test('disabled contact is skipped without an unknown intent and later cards continue', async () => {
   const c = context();
-  c.list = ['a', 'b'].map(id => ({ id, company: id, title: '全栈开发', location: '杭州', scaleEvidence: 'native', recruiter: 'HR' }));
+  c.list = ['a', 'b'].map(id => ({ id, company: id, title: '全栈开发', location: '杭州', salary: '11-20K', scaleEvidence: 'native', recruiter: 'HR' }));
   c.jobs.detail = async () => ({ text: '职位描述开发HR', buttons: [{ text: '立即沟通' }] });
   c.chat.searchHistory = async () => ({ empty: true });
   c.decide = () => ({ action: 'contact', reason: '匹配', message: '您好，我对这个岗位有兴趣，之前做过相关开发。' });
@@ -44,21 +44,21 @@ test('disabled contact is skipped without an unknown intent and later cards cont
   assert.ok(c.report.jobReviews.every(j => /按钮不可用/.test(j.rejected)));
 });
 test('model skip does not send; completed task is not reported as successful outreach', async () => {
-  const c = context(); const job = { id: 'job', company: 'company', title: 'Go工程师', location: '杭州', scaleEvidence: 'native' };
+  const c = context(); const job = { id: 'job', company: 'company', title: 'Go工程师', location: '杭州', salary: '11-20K', scaleEvidence: 'native' };
   c.list = [job]; c.jobs.detail = async () => ({ text: 'JD', buttons: [{ text: '立即沟通' }] });
   c.chat.searchHistory = async () => ({ empty: true }); c.decide = () => ({ action: 'skip', reason: '专业不匹配' });
   await contactJobs(c); c.report.status = 'completed'; const s = summarizeCycle(c.report);
   assert.equal(c.report.intents.length, 0); assert.equal(s.outcome, 'completed_no_send'); assert.equal(s.reasons['模型判断不匹配'], 1);
 });
 test('detail timeout skips one card; authentication stops the workflow', async () => {
-  const c = context(); c.list = [{ id: 'job', location: '杭州', scaleEvidence: 'native' }];
+  const c = context(); c.list = [{ id: 'job', location: '杭州', salary: '11-20K', scaleEvidence: 'native' }];
   c.jobs.detail = async () => { throw Error('页面内容未就绪'); }; await contactJobs(c);
   assert.equal(c.report.jobReviews.length, 1); assert.equal(c.report.intents.length, 0);
   c.jobs.detail = async () => { throw Error('需要人工登录或验证'); };
   await assert.rejects(contactJobs(c), /验证/);
 });
 test('production batch path generates once and sends separately after fresh history checks', async () => {
-  const c = context(); c.list = ['a', 'b'].map(id => ({ id, company: id, title: 'AI产品', location: '杭州', scaleEvidence: 'native', recruiter: 'HR' }));
+  const c = context(); c.list = ['a', 'b'].map(id => ({ id, company: id, title: 'AI产品', location: '杭州', salary: '11-20K', scaleEvidence: 'native', recruiter: 'HR' }));
   c.jobs.detail = async () => ({ text: '职位描述产品HR', buttons: [{ text: '立即沟通' }] });
   const reads = [], sends = []; let calls = 0;
   c.chat.searchHistory = async company => { reads.push(company); return { empty: true }; };

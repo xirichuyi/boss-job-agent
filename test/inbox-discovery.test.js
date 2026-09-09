@@ -10,7 +10,7 @@ test('verified unread contacts are checked first, unknown contacts never sent to
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'inbox-discovery-'));
   t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
   fs.mkdirSync(root+'/memory');
-  const ledger={contacts:['a','b'].map(id=>({status:'delivered',job:{id,company:id,recruiter:'HR'}}))};
+  const ledger={contacts:['a','b'].map(id=>({status:'delivered',job:{id,company:id,recruiter:'HR',salary:'11-15K'}}))};
   const checked=[];
   const report={intents:[],receipts:[],result:{messagesSent:0}};
   await checkInbox({root,ledger,report,progress(){},save(){},assertAuthority(){},decide:()=>assert.fail('no unanswered message'),chat:{

@@ -1,8 +1,9 @@
+import { rejectJobFilters } from './job-filters.js';
 import { AGENT } from './agent-config.js';
 export function hardReject(job) {
   if (!job.location?.startsWith(AGENT.search.city)) return '工作地点不是' + AGENT.search.city;
   if (!job.scaleEvidence) return '没有目标公司规模证据';
-  return null;
+  return rejectJobFilters(job);
 }
 
 export function validateOutwardMessage(message) {
