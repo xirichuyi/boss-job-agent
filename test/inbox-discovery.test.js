@@ -25,7 +25,8 @@ test('verified unread contacts are checked first, unknown contacts never sent to
 test('hidden known conversation triggers bounded list lookup before opening', async () => {
   const b=new VisibleTools(); let scanned=0;
   b.clearSearch=async()=>{}; b.evaluate=async()=>null;
-  b.scanConversations=async({findJob,deadline})=>{assert.equal(findJob.id,'job');assert.ok(Number.isFinite(deadline));scanned++;};
+  b.searchHistory=async()=>({empty:true});
+  b.scanConversations=async({findJob,deadline})=>{assert.equal(findJob.id,'job');assert.ok(Number.isFinite(deadline));scanned++;return {found:true};};
   b.until=async()=>({messages:[]});
   await b.openConversation({id:'job',company:'company',recruiter:'HR',title:'title'});
   assert.equal(scanned,1);

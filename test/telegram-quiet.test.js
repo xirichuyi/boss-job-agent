@@ -31,6 +31,12 @@ test('authentication alert is retained and sent once', async t => {
   assert.equal((await flushTelegram(root, fetcher)).sent, 0);
   assert.equal(sends, 1);
 });
+test('exhausted contact recovery sends one summary, ordinary retries remain quiet',async t=>{
+  const root=setup(t,[{id:'recovery',kind:'contact_recovery_exhausted',status:'open',reason:'恢复已达重试上限'},{id:'pending',kind:'contact_recovery_pending',status:'open'}]);
+  let calls=0;const fetcher=async()=>{calls++;return{json:async()=>({ok:true,result:{message_id:9}})}};
+  await flushTelegram(root,fetcher);await flushTelegram(root,fetcher);
+  assert.equal(calls,1);
+});
 test('chat loop has no automatic welcome or cycle sender; watchdog never sends Telegram', () => {
   const loop = fs.readFileSync(new URL('../scripts/telegram-chat.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(loop, /await send\(help\)|本轮求职结果|state\.summaries\.push/);

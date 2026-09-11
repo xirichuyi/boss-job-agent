@@ -1,3 +1,4 @@
 {
-  "parallelWorkflows": true
+  "parallelWorkflows": true,
+  "contactRecovery": {"perRun": 3, "minutes": 2, "maxAttempts": 3, "retryMinutes": 30}
 }

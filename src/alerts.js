@@ -1,6 +1,15 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { atomicJson } from './schedule-state.js';
+export function resolveContactAlerts(root,contact) {
+  const path=root+'/memory/alerts.json';
+  if(!fs.existsSync(path))return;
+  const list=JSON.parse(fs.readFileSync(path,'utf8'));
+  for(const a of list)if(a.contact===contact&&['contact_recovery_pending','unknown_send','history_read_failed'].includes(a.kind)){
+    a.status='resolved';a.resolvedAt=new Date().toISOString();
+  }
+  atomicJson(path,list);
+}
 
 export function raiseAlert(root, alert) {
   const path = root + '/memory/alerts.json';

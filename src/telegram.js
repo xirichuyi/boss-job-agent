@@ -35,7 +35,7 @@ export async function flushTelegram(root, fetcher = fetch) {
   if (!fs.existsSync(path)) return { state: 'ready', sent: 0 };
   const alerts = JSON.parse(fs.readFileSync(path, 'utf8'));
   let count = 0;
-  for (const alert of alerts.filter(a => a.kind === 'authentication' && a.status === 'open' && !a.telegram?.messageId).slice(0, 1)) {
+  for (const alert of alerts.filter(a => ['authentication','contact_recovery_exhausted'].includes(a.kind) && a.status === 'open' && !a.telegram?.messageId).slice(0, 1)) {
     if (Date.parse(alert.telegram?.retryAt || '') > Date.now()) continue;
     const title = alert.kind === 'authentication' ? '需要你扫码登录或完成人机验证' : '求职 Agent 有待处理事项';
     // Keep personal resume/chat contents out of the notification payload.

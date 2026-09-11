@@ -266,9 +266,28 @@ export class VisibleTools extends BossTools {
   async openConversation(job) {
     await this.clearSearch();
     const expression = `(()=>{const matches=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>{const n=e.querySelector('.name-box');return n&&n.innerText.includes(${JSON.stringify(job.company)})&&n.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)}});if(matches.length!==1)return null;return matches[0].innerText})()`;
-    if (!await this.evaluate(expression)) await this.scanConversations({findJob:job, deadline:Date.now()+loadJobFilters().conversationLookupMs});
-    await this.until(expression, 25000);
-    await this.evaluate(`(()=>{const e=[...document.querySelectorAll('li[role="listitem"]')].find(e=>e.querySelector('.name-box')?.innerText.includes(${JSON.stringify(job.company)})&&e.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)});e.querySelector('.friend-content').click();return true})()`);
+    let opened=false;
+    if (!await this.evaluate(expression)) {
+      // Platform search is not limited to the currently virtualized list rows.
+      const result=await this.searchHistory(job.company);
+      if(!result.empty) {
+        opened=await this.evaluate(`(()=>{
+          const rows=[...document.querySelectorAll('.boss-search-result .search-list')].filter(e=>
+            e.querySelector('.boss-name')?.textContent.trim()===${JSON.stringify(job.recruiter)} &&
+            e.querySelector('.company-name')?.textContent.trim()===${JSON.stringify(job.company)});
+          if(rows.length!==1)return false;
+          rows[0].click();return true;
+        })()`);
+      }
+      if(!opened) {
+        const discovery=await this.scanConversations({findJob:job,deadline:Date.now()+loadJobFilters().conversationLookupMs});
+        if(!discovery.found)throw Object.assign(Error('CONTACT_LOOKUP_FAILED：联系人搜索与列表查找均未唯一定位'),{code:'CONTACT_LOOKUP_FAILED'});
+      }
+    }
+    if(!opened) {
+      await this.until(expression,5000);
+      await this.evaluate(`(()=>{const rows=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>e.querySelector('.name-box')?.innerText.includes(${JSON.stringify(job.company)})&&e.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)});if(rows.length!==1)throw Error('联系人不唯一');rows[0].querySelector('.friend-content').click();return true})()`);
+    }
     return this.until(`(()=>{const c=document.querySelector('.chat-conversation');if(!c||!c.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)})||!c.innerText.includes(${JSON.stringify(job.title)}))return null;return {text:c.innerText,messages:[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))}})()`);
   }
   async contactReady(job) {

@@ -31,7 +31,7 @@ export function snapshot(root) {
     cycle: { id: cycle.id, status: cycle.status, at: cycle.at, result: cycle.result, reason: cycle.reason, summary: cycle.summary },
     reviews: (report.jobReviews || []).map(j => ({ company: j.company, title: j.title, rejected: j.rejected, decision: j.decision })),
     contacts: contacts.map(e => ({ company: e.job.company, title: e.job.title, status: e.status, pendingUser: e.pendingUser,
-      lastMessage: e.intent?.message, platformAttachment: e.platformAttachment, platformCheckedAt: e.platformCheckedAt })),
+      lastMessage: e.intent?.message, deliveryStage:e.deliveryStage, contactRecovery:e.contactRecovery, platformAttachment: e.platformAttachment, platformCheckedAt: e.platformCheckedAt })),
     alerts: readJson(root + '/memory/alerts.json', []).filter(a => a.status === 'open').slice(-10).map(a => ({ kind: a.kind, reason: a.reason, at: a.lastSeen })) };
 }
 export function statusText(s) {

@@ -15,7 +15,7 @@
 
 运行 npm ci、Node/Python 测试和安全初始化。配置浏览器仅本地监听，通过 SSH 隧道或有身份认证的网关让我人工扫码；不绕过验证码，不关闭 Chromium sandbox，不直接暴露 CDP/VNC/noVNC。先做只读健康检查，核对原生筛选和平台附件文件名。
 
-默认保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或任何真实发送。不要为了测试消耗求职额度。Telegram 可选，只回复查询和推送人工验证提醒；验证私聊所有者后再绑定。
+默认保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或任何真实发送。不要为了测试消耗求职额度。Telegram 可选，只回复查询、推送人工验证及自动恢复耗尽提醒；验证私聊所有者后再绑定。
 
 授权后先用 perRun=1 验证一轮，区分文本沟通、回复与附件发送，以平台送达回执验收，不把 active/completed 当成已投递。随后安装审核过的 systemd 模板，配置最小权限并验证重启、暂停和状态查询。给我交付路径、配置清单、服务状态、实际测试结果、未验证项和恢复办法；不要声称已经实现绝对无人值守。
 ```
@@ -116,7 +116,13 @@ node scripts/harness-state.mjs enqueue
 
 通过私密文件保存 token，权限 0600，不把 token 写进 shell 历史、提示词或 Git。`memory/telegram-secrets.json` 结构为 `{"token":"你的令牌"}`。`memory/telegram-config.json` 可以填写本人核实的私聊 `chatId`，或通过现有配对流程设置 `pairCode`、`pairIssuedAt`、`pairExpiresAt`，向机器人发送 `绑定求职<配对码>` 后运行 telegram-notify 完成绑定。禁止使用猜测或来自群聊的 ID。
 
-`/status` 不调用模型；自然语言问答使用同一模型配置；`/run` 只入队，不绕过暂停和额度。只主动推送扫码/人机验证提醒，不播报每步操作或周期总结。绑定后再启用 Telegram unit。服务器断网时无法立即推送。
+`/status` 不调用模型；自然语言问答使用同一模型配置；`/run` 只入队，不绕过暂停和额度。只主动推送扫码/人机验证及联系人恢复耗尽的去重汇总提醒，不播报每步操作或周期总结。绑定后再启用 Telegram unit。服务器断网时无法立即推送。
+
+### 联系中断的恢复
+
+聊天列表未定位到 HR 时，先用平台联系人搜索精确匹配公司和姓名，再核对会话岗位。首次联系失败只隔离该联系人，其他候选人继续；不因这种错误反复延长整轮等待。未确认发送仍保留额度，不报成发送成功。
+
+`config/execution.json.contactRecovery` 控制恢复：默认每轮最多3人、2分钟，失败间隔30分钟、累计最多3次。只对有可靠记录证明定制话术尚未进入发送步骤、当前历史仅有默认招呼的会话补发；已经尝试发送但回执未知的消息只核对、不重发。HR已回复则移交正常收件箱流程。阶段、次数、原因、下次重试时间保存在联系人 `contactRecovery` 字段，恢复成功关闭对应告警；耗尽后保留人工处理状态并通知 Telegram，其他工作继续。
 
 ## 目录与边界
 

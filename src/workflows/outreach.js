@@ -1,12 +1,13 @@
+import { deferContact } from './contact-recovery.js';
 import { shanghaiDay } from '../schedule-state.js';
 import { AGENT } from '../agent-config.js';
 import { pendingWrite } from './reconcile.js';
 import { hardReject } from '../job-policy.js';
 import { classifyFailure } from '../autonomy.js';
-export async function contactJobs({list, cycle, ledger, report, jobs, chat, decide, progress, save, assertAuthority, withChat = task => task(), deadline = Infinity}) {
+export async function contactJobs({root, list, cycle, ledger, report, jobs, chat, decide, progress, save, assertAuthority, withChat = task => task(), deadline = Infinity}) {
   const priorDetails = report.jobReviews.filter(j => j.text).length;
   const candidates = [];
-  const batchLimit = Math.min(3, cycle.newContactAllocation - report.result.newContacts);
+  const batchLimit = Math.min(3, cycle.newContactAllocation - ledger.contacts.filter(e=>e.cycle===cycle.id).length);
   if (batchLimit <= 0) return;
   for (const card of list) {
     if (Date.now() >= deadline) { report.searchStop = '达到本轮搜索时长，结束搜索分支'; break; }
@@ -40,7 +41,7 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
   if (!candidates.length || Date.now() >= deadline) return;
   const decisions = decide.batch ? await decide.batch(candidates) : await Promise.all(candidates.map(({ job, history }) => decide(job, history, 'contact')));
   for (let i = 0; i < candidates.length; i++) {
-    if (Date.now() >= deadline || report.result.newContacts >= cycle.newContactAllocation) break;
+    if (Date.now() >= deadline || ledger.contacts.filter(e=>e.cycle===cycle.id).length >= cycle.newContactAllocation) break;
     const { job } = candidates[i], decision = decisions[i];
     job.decision = decision; save();
     if (decision.action === 'skip') continue;
@@ -53,13 +54,13 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     if (!await jobs.contactReady(job)) {
       job.rejected = '平台沟通按钮不可用，未点击；后续轮次可重新检查'; save(); continue;
     }
-    await withChat(async () => {
+    try { await withChat(async () => {
     if (Date.now() >= deadline) return;
     if (!(await chat.searchHistory(job.company)).empty) { job.rejected = '发送前平台已有公司联系人，未发送'; save(); return; }
     if (shanghaiDay() !== shanghaiDay(new Date(cycle.at))) return; // Next day must reserve its own quota.
     assertAuthority();
     const intent = { kind: 'first_contact', jobId: job.id, company: job.company, recruiter: job.recruiter, message: decision.message, at: new Date().toISOString(), status: 'outcome_unknown' };
-    const entry = { job, status: 'outcome_unknown', cycle: cycle.id, intent };
+    const entry = { job, status: 'outcome_unknown', cycle: cycle.id, intent, deliveryStage:'lookup_pending' };
     ledger.contacts.push(entry); report.intents.push(intent); save();
     progress('contact_once', { company: job.company, recruiter: job.recruiter });
     await jobs.contactOnce(job);
@@ -71,9 +72,17 @@ export async function contactJobs({list, cycle, ledger, report, jobs, chat, deci
     const supplement = { kind: 'targeted_message', jobId: job.id, message: decision.message, status: 'prepared' };
     report.intents.push(supplement); save();
     progress('send_targeted_message', { company: job.company, recruiter: job.recruiter });
-    const receipt = await chat.sendText(job, decision.message, conversation, () => { assertAuthority(); supplement.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('text', conversation, { message: decision.message }); save(); });
-    supplement.status = 'delivered'; entry.status = 'delivered'; entry.receipt = receipt; delete entry.pendingWrite;
+    const receipt = await chat.sendText(job, decision.message, conversation, () => { assertAuthority(); supplement.status = 'outcome_unknown'; entry.deliveryStage='supplement_attempted'; entry.pendingWrite = pendingWrite('text', conversation, { message: decision.message }); save(); });
+    supplement.status = 'delivered'; entry.status = 'delivered'; entry.deliveryStage='complete'; entry.receipt = receipt; delete entry.pendingWrite;
     report.receipts.push(receipt); report.result.messagesSent++; save();
-    });
+    }); } catch(error) {
+      if(classifyFailure(error.message)==='authentication')throw error;
+      const failed=ledger.contacts.find(e=>e.cycle===cycle.id&&e.job.id===job.id);
+      if(!failed) { job.rejected='联系前读取失败，留待下轮：'+error.message;save();continue; }
+      deferContact(root,failed,error,save);
+      report.contactFailures ||= [];
+      report.contactFailures.push({jobId:job.id,stage:failed.deliveryStage,reason:error.message});
+      save();
+    }
   }
 }

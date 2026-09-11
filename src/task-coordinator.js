@@ -4,6 +4,8 @@ import fs from 'node:fs';
 export function executionConfig() {
   const config=JSON.parse(fs.readFileSync(new URL('../config/execution.json',import.meta.url),'utf8'));
   if(typeof config.parallelWorkflows!=='boolean')throw Error('并行调度配置无效');
+  const r=config.contactRecovery;
+  if(!r || !['perRun','minutes','maxAttempts','retryMinutes'].every(k=>Number.isInteger(r[k])&&r[k]>0) || r.minutes>3 || r.perRun>10 || r.maxAttempts>10)throw Error('联系人恢复配置无效');
   return config;
 }
 

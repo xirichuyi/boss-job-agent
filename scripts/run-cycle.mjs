@@ -3,6 +3,7 @@ import { AGENT } from '../src/agent-config.js';
 import { createAsyncDecision } from '../src/workflows/async-decision.js';
 import { PriorityMutex, coordinatedChat, runParallelLanes, executionConfig } from '../src/task-coordinator.js';
 import { checkInbox } from '../src/workflows/inbox.js';
+import { recoverContacts } from '../src/workflows/contact-recovery.js';
 import { reconcileUnknown } from '../src/workflows/reconcile.js';
 import { searchJobs, nextSearchPage } from '../src/workflows/search.js';
 import { contactJobs } from '../src/workflows/outreach.js';
@@ -57,6 +58,7 @@ try {
   };
   await runParallelLanes({
     inbox:lane('inbox',async()=>{
+      await recoverContacts({...context,chat:inboxChat,deadline:Date.now()+executionConfig().contactRecovery.minutes*60000});
   const replyDeadline = Date.now() + AGENT.workflow.replyMinutes * 60000;
   await reconcileUnknown({ ...context, chat:inboxChat, deadline: replyDeadline });
   await checkInbox({ ...context, chat:inboxChat, deadline: replyDeadline });
@@ -83,7 +85,9 @@ try {
 
     })
   },(name,error)=>{stopped ||= error;},executionConfig().parallelWorkflows);
-  report.status = 'completed';
+  if(report.contactFailures?.length || report.intents.some(i=>i.status==='outcome_unknown')){
+    report.status='blocked';report.reason='CONTACT_RECOVERY_PENDING：个别联系人待恢复，其他分支已正常执行';process.exitCode=1;
+  } else report.status = 'completed';
 } catch (error) { report.status = 'blocked'; report.reason = error.message; process.exitCode = 1; }
 finally {
   jobs.disconnect(); chat.disconnect(); report.summary = summarizeCycle(report); report.completedAt = new Date().toISOString(); save();

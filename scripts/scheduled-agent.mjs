@@ -111,7 +111,8 @@ if (finished.status === 'completed') {
   atomicJson(retryPath, { attempts: 0 });
 } else {
   retry.attempts = (retry.attempts || 0) + 1;
-  retry.nextAt = new Date(Date.now() + retryDelay(retry.attempts)).toISOString();
+  const contactOnly = (finished.reason || '').includes('CONTACT_RECOVERY_PENDING') || (finished.reason || '').includes('联系人暂未找到');
+  retry.nextAt = new Date(Date.now() + (contactOnly ? config.intervalMinutes*60000 : retryDelay(retry.attempts))).toISOString();
   atomicJson(retryPath, retry);
   raiseAlert(root, { kind: /登录|验证|访问受限/.test(finished.reason || '') ? 'authentication' : 'cycle_failed', cycle: cycle.id, reason: finished.reason || '任务失败，将自动核对并恢复', nextAt: retry.nextAt });
 }
