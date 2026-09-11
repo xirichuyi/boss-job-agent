@@ -28,6 +28,7 @@ export function snapshot(root) {
   const report = id ? readJson(`${root}/memory/cycles/${id}.json`, {}) : {};
   const contacts = readJson(root + '/memory/outreach-ledger.json', { contacts: [] }).contacts;
   return { capturedAt: new Date().toISOString(), model: MODEL, reasoningEffort: REASONING_EFFORT, status, service,
+    business:readJson(root+'/memory/watchdog-state.json',{}).business,
     inboxDiscovery: readJson(root + '/memory/inbox-discovery.json', null), reconciliation: report.reconciliation,
     cycle: { id: cycle.id, status: cycle.status, at: cycle.at, result: cycle.result, reason: cycle.reason, summary: cycle.summary },
     reviews: (report.jobReviews || []).map(j => ({ company: j.company, title: j.title, rejected: j.rejected, decision: j.decision })),
@@ -36,6 +37,11 @@ export function snapshot(root) {
     alerts: readJson(root + '/memory/alerts.json', []).filter(a => a.status === 'open').slice(-10).map(a => ({ kind: a.kind, reason: a.reason, at: a.lastSeen })) };
 }
 export function statusText(s) {
+  const business=s.business;
+  if(business){
+    const labels={healthy:'正常',warning:'存在失败',degraded:'连续失败，需要检查'};
+    return `业务健康：${labels[business.state]||business.state}；连续异常 ${business.failureStreak||0} 轮\n${(business.reasons||[]).join('；')}\n`+statusText({...s,business:null});
+  }
   const c = { ...s.cycle, reason: s.cycle.reason || s.cycle.summary?.explanation }, r = c.result;
   return `求职 Agent 状态：${s.status.state || '未知'}\n阶段：${s.status.phase || '—'}\n当前岗位：${s.status.company || '—'} / ${s.status.job || '—'}\n本轮：${c.status || '未知'}${r ? `；已确认新联系 ${r.newContacts} 人，消息 ${r.messagesSent} 条，附件 ${r.attachmentsSent} 份` : '；尚无完成结果'}\n原因：${c.reason || '—'}\n下一次检查/运行：${s.status.nextAt || '执行中或待调度'}\n数据时间（UTC）：${s.capturedAt}\n上限：每天${AGENT.schedule.dailyNewContactLimit}位新HR；${searchCities().map(c=>c.name).join("、")}、${AGENT.search.minimumCompanySize}人以上；不保证凑满。`;
 }

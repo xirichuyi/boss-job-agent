@@ -21,3 +21,7 @@ test('status distinguishes new HR, messages and attachments', () => {
   const text = statusText({ status: { state: 'waiting' }, cycle: { status: 'completed', result: { newContacts: 1, messagesSent: 2, attachmentsSent: 0 } }, capturedAt: since });
   assert.match(text, /新联系 1 人/); assert.match(text, /消息 2 条/); assert.match(text, /附件 0 份/);
 });
+test('status exposes business failures even when scheduler remains active',()=>{
+  const text=statusText({status:{state:'waiting'},cycle:{status:'completed'},business:{state:'degraded',failureStreak:3,reasons:['会话历史持续读取失败']}});
+  assert.match(text,/连续失败，需要检查/);assert.match(text,/连续异常 3 轮/);
+});
