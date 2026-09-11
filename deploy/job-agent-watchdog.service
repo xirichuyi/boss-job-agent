@@ -5,6 +5,6 @@ Description=Job agent supervisor recovery (requires service management authority
 Type=oneshot
 User=@USER@
 WorkingDirectory=@ROOT@
-ExecStart=@NODE@ @ROOT@/scripts/watchdog.mjs
+ExecStart=@NODE@ @ROOT@/scripts/watchdog.ts
 TimeoutStartSec=55
 UMask=0077

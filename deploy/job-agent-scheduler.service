@@ -8,11 +8,11 @@ Type=simple
 User=@USER@
 WorkingDirectory=@ROOT@
 Environment=NODE_BINARY=@NODE@
-ExecStart=@PYTHON@ @ROOT@/scripts/scheduler.py
+ExecStart=@NODE@ @ROOT@/scripts/scheduler.ts
 Restart=always
 RestartSec=15
 KillMode=control-group
-TimeoutStopSec=15
+TimeoutStopSec=45
 UMask=0077
 
 [Install]

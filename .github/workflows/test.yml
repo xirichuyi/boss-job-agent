@@ -11,10 +11,6 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - run: npm ci
-      - run: node scripts/check-public.mjs
-      - run: npm test
-      - run: python3 -m unittest discover -s test -p '*_test.py'
+      - run: node scripts/check-public.ts
+      - run: npm run check

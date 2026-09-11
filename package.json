@@ -5,13 +5,20 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "doctor": "node scripts/doctor.mjs",
-    "health": "node scripts/browser-health.mjs",
-    "status": "node scripts/agent-status.mjs",
-    "setup": "node scripts/setup.mjs",
-    "start": "python3 scripts/scheduler.py",
-    "init": "node scripts/init.mjs",
-    "test": "node --test"
+    "doctor": "node scripts/doctor.ts",
+    "health": "node scripts/browser-health.ts",
+    "status": "node scripts/agent-status.ts",
+    "setup": "node scripts/setup.ts",
+    "start": "node scripts/scheduler.ts",
+    "init": "node scripts/init.ts",
+    "test": "node --test test/*.test.ts",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.core.json",
+    "check": "npm run typecheck && npm test",
+    "format": "prettier --write 'src/**/*.ts' 'scripts/*.ts' 'test/*.ts'"
   },
-  "dependencies": {}
+  "devDependencies": {
+    "@types/node": "24.13.4",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
 }

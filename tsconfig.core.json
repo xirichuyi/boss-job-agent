@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "strict": true },
+  "include": [
+    "src/domain/contracts.ts",
+    "src/runtime/process-supervisor.ts",
+    "src/runtime/scheduler.ts"
+  ]
+}

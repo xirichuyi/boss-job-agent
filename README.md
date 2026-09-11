@@ -9,7 +9,7 @@
 复制给安装 Agent：
 
 ```text
-请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、ARCHITECTURE，并检查系统、现有服务、Node/Python、浏览器和 Codex CLI。先列变更清单，不覆盖已有代码、账本、浏览器目录或 systemd unit。
+请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、ARCHITECTURE，并检查系统、现有服务、Node.js、浏览器和 Codex CLI。先列变更清单，不覆盖已有代码、账本、浏览器目录或 systemd unit。
 
 代码放在我确认的 /opt 工作目录。先运行 npm ci，再使用 npm run setup 生成独立私密配置目录；通过 BOSS_CONFIG_DIR 指向该目录，所有 CLI、后台服务、浏览器启动器保持一致。
 agent.json 管理规模、关键词、频率、额度、附件名和程序路径；job-filters.json 管理城市、薪资和岗位类型；model.json 管理模型和推理强度；execution.json 管理并行和恢复策略。不要再写 agent.search.city/cityCode，不把偏好硬编码进代码或提示词。
@@ -18,7 +18,7 @@ agent.json 管理规模、关键词、频率、额度、附件名和程序路径
 
 运行 npm run doctor -- --offline 检查本机，再配置非root Chromium、独立用户目录及本地监听端口。通过SSH隧道或有身份认证的网关让我扫码，不关闭sandbox、不直接暴露CDP/VNC/noVNC。只对全新目录执行 npm run init。打开岗位页和聊天页，再运行 npm run doctor、npm run health、npm run status；区分检查成功与尚未验证的模型权限/附件/真实发送。
 
-保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或真实发送。授权后首次 perRun=1，以平台送达回执验收。服务模板要审核路径、用户、权限和 BOSS_CONFIG_DIR；不要强杀正在等待回执的发送。Telegram仅用于查询、验证提醒和恢复耗尽的去重告警。
+保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.ts --once 或真实发送。授权后首次 perRun=1，以平台送达回执验收。服务模板要审核路径、用户、权限和 BOSS_CONFIG_DIR；不要强杀正在等待回执的发送。Telegram仅用于查询、验证提醒和恢复耗尽的去重告警。
 
 交付实际配置路径、服务状态、测试结果、未验证项与恢复办法。不要把 active/completed 当成已投递，不承诺绝对无人值守。
 ```
@@ -27,7 +27,7 @@ agent.json 管理规模、关键词、频率、额度、附件名和程序路径
 
 要复现完整常驻流程，参见 [部署与逐项验收](docs/DEPLOYMENT-ACCEPTANCE.md)。代码测试、现场检查、真实送达是三种不同的验收，不能互相替代。
 
-前置：Linux、Node.js 24+、Python 3.11+、可用的 Codex CLI 与浏览器。systemd 仅用于服务器常驻服务。
+前置：Linux、Node.js 24+、util-linux（flock）、可用的 Codex CLI 与浏览器。systemd 仅用于服务器常驻服务。
 
 ```bash
 git clone https://github.com/xirichuyi/boss-job-agent.git
@@ -78,8 +78,8 @@ doctor 给出逐项结果、修复建议；`--json` 输出机器可读报告。`
 本人确认筛选、资料和发送授权后才执行：
 
 ```bash
-node scripts/enable.mjs --confirm-real-sends
-python3 scripts/scheduler.py --once
+node scripts/enable.ts --confirm-real-sends
+node scripts/scheduler.ts --once
 ```
 
 **最后一条会真实联系 HR，不是预览。** 先验收一轮送达回执，再扩大额度。
@@ -107,13 +107,13 @@ BOSS 薪资是单选档位：405/406/407对应10–20K、20–50K、50K以上。
 
 ## 运行架构
 
-Python只负责分钟唤醒、OS文件锁和进程组超时；业务、浏览器、模型与SQLite状态均在JavaScript中。不维护两套业务逻辑。
+应用、调度与测试统一使用 TypeScript，由 Node.js 24 直接运行。运行监督模块负责分钟唤醒、flock 文件锁和进程组超时；业务不依赖交互式会话。
 
 ```text
-scheduler.py（进程监督，15分钟硬超时）
-  → scheduled-agent.mjs（授权、队列、租约、额度）
-    → run-cycle.mjs（生命周期、持久化、最终收尾）
-      → workflows/cycle-runner.js
+scheduler.ts（进程监督，15分钟硬超时）
+  → scheduled-agent.ts（授权、队列、租约、额度）
+    → run-cycle.ts（生命周期、持久化、最终收尾）
+      → application/cycle-runner.ts
           ├─ 搜索 → JD → 批量文案 → 联系
           └─ 对账/恢复 → 收件箱 → 回复/附件
               共用聊天互斥队列；模型在后台线程中等待
@@ -125,14 +125,14 @@ scheduler.py（进程监督，15分钟硬超时）
 
 ## 常驻运行、暂停与升级
 
-审核 deploy/ 中模板并替换 @ROOT@、@USER@、@NODE@、@PYTHON@。代码路径、执行用户、私密目录与Codex账号必须对应。每个使用配置的unit都应设置同一个 `Environment="BOSS_CONFIG_DIR=/绝对路径"`。不要覆盖已有同名服务。
+审核 deploy/ 中模板并替换 @ROOT@、@USER@、@NODE@。代码路径、执行用户、私密目录与Codex账号必须对应。每个使用配置的unit都应设置同一个 `Environment="BOSS_CONFIG_DIR=/绝对路径"`。不要覆盖已有同名服务。
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now job-agent-scheduler.service
 npm run status
-node scripts/agent-control.mjs pause
-node scripts/agent-control.mjs resume
+node scripts/agent-control.ts pause
+node scripts/agent-control.ts resume
 ```
 
 pause/maintenance 禁止新发送但不直接停止服务，让在途回执完成；服务 active 不等于任务已启用。maintenance 接收分钟数，如 `maintenance 15`。resume 默认尝试启动systemd服务，需对应管理权限；前台运行可用 `resume --state-only`，然后手动运行调度器。不得因此授予任意sudo权限。
@@ -163,7 +163,7 @@ Telegram可选：令牌存 memory/telegram-secrets.json，私聊绑定存 memory
 - 附件发送有实现和mock测试，但缺少广泛真实场景覆盖。
 - 模型输出不能保证永远准确；不编造履历，不擅自承诺面试时间或薪资。
 - 配置向导不是系统软件安装器；systemd权限、浏览器认证网关仍需部署者核对。
-- 当前仍保留Python监督层，未为统一语言重写可靠的进程组超时机制。
+- 运行代码统一为 TypeScript；历史平台数据仍含宽类型边界，尚未宣称全项目严格类型覆盖。
 
 ## 开源与隐私
 

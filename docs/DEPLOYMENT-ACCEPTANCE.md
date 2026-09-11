@@ -8,7 +8,7 @@
 
 以同一个非 root 服务用户完成安装、Codex 登录、配置、初始化和常驻运行。浏览器独立用户也可以，但目录权限和本地 CDP 可达性须另行验证。不要复制作者的登录态、令牌或账本。Codex 是子进程调用，不依赖一直打开的交互会话或 tmux。
 
-按 README 执行 setup/init/profile/browser/doctor；doctor 不验证模型额度、附件或送达。agent.json 中 codex.binary 和 browser.binary 推荐填本机实际可执行文件的绝对路径；systemd 不加载交互 shell 的 PATH。Node/Python 使用模板中的绝对路径。启动包装器若使用 `/usr/bin/env node`，仍须为服务显式设置正确 PATH。
+按 README 执行 setup/init/profile/browser/doctor；doctor 不验证模型额度、附件或送达。agent.json 中 codex.binary 和 browser.binary 推荐填本机实际可执行文件的绝对路径；systemd 不加载交互 shell 的 PATH。Node.js 使用模板中的绝对路径。启动包装器若使用 `/usr/bin/env node`，仍须为服务显式设置正确 PATH。
 
 ## 流程对应与验收证据
 
@@ -16,16 +16,16 @@
 | --- | --- | --- |
 | 本人资料和偏好 | candidate-profile.md、BOSS_CONFIG_DIR 四文件 | status 显示实际城市、薪资、模型和来源；人工核实资料 |
 | 扫码与看浏览器 | start-desktop.sh、CDP、SSH/认证网关 | 本人能看到浏览器，岗位/聊天页已登录 |
-| 定时唤醒 | scheduler.py → scheduled-agent.mjs | 心跳更新；等待时间、暂停、额度正确；不能只看 service active |
-| 刷岗、读 JD | workflows/search.js | 原生筛选响应证据、读取数量、跳过原因 |
-| 首次联系并附话术 | workflows/outreach.js | 平台实际出现定制正文，receipts 记录送达；默认招呼不代表正文成功 |
-| 回复和附件 | workflows/inbox.js | 新 HR 消息被读到、回复送达；附件名与平台一致且有回执 |
-| 单人异常不拖停其他人 | contact-recovery.js、reconcile.js | 隔离/重试原因和下次时间；其他联系人继续；未知结果不盲重发 |
-| 查询与通知 | telegram-chat.mjs、telegram-notify.mjs | 可选私聊 /status；无逐步播报；断网不承诺即时告警 |
+| 定时唤醒 | scheduler.ts → scheduled-agent.ts | 心跳更新；等待时间、暂停、额度正确；不能只看 service active |
+| 刷岗、读 JD | application/search.ts | 原生筛选响应证据、读取数量、跳过原因 |
+| 首次联系并附话术 | application/outreach.ts | 平台实际出现定制正文，receipts 记录送达；默认招呼不代表正文成功 |
+| 回复和附件 | application/inbox.ts | 新 HR 消息被读到、回复送达；附件名与平台一致且有回执 |
+| 单人异常不拖停其他人 | contact-recovery.js、reconcile.ts | 隔离/重试原因和下次时间；其他联系人继续；未知结果不盲重发 |
+| 查询与通知 | telegram-chat.ts、telegram-notify.ts | 可选私聊 /status；无逐步播报；断网不承诺即时告警 |
 
 ## 常驻服务必须与终端一致
 
-先替换 deploy 模板的 @ROOT@、@USER@、@NODE@、@PYTHON@，然后在 scheduler、telegram、watchdog 的 `[Service]` 都加上：
+先替换 deploy 模板的 @ROOT@、@USER@、@NODE@，然后在 scheduler、telegram、watchdog 的 `[Service]` 都加上：
 
 ```ini
 Environment="BOSS_CONFIG_DIR=/opt/boss-job-agent/config/private-local"
@@ -37,8 +37,8 @@ Environment="BOSS_CONFIG_DIR=/opt/boss-job-agent/config/private-local"
 
 ## 三层验收，不能混为一谈
 
-1. **代码验证**：`npm test`；包含全新目录初始化、私密配置、Python 调度到 Node 派发、默认禁止发送、暂停/恢复。浏览器和发送单元测试使用模拟平台，不能证明真实账号权限。
-2. **现场无发送验证**：同一服务用户执行 doctor/health/status；保持 enabled=false，验证实际后台能加载配置并持久化状态。不能在已授权账号上把 scheduler.py --once 当作无发送测试。
+1. **代码验证**：`npm test`；包含全新目录初始化、私密配置、TypeScript 监督器调度到派发器、默认禁止发送、暂停/恢复。浏览器和发送单元测试使用模拟平台，不能证明真实账号权限。
+2. **现场无发送验证**：同一服务用户执行 doctor/health/status；保持 enabled=false，验证实际后台能加载配置并持久化状态。不能在已授权账号上把 scheduler.ts --once 当作无发送测试。
 3. **明确授权后的真实验证**：perRun=1，enable 后单轮执行；查看平台定制正文与送达回执。再以真实 HR 回复验证回复链路、按请求验证附件，最后启用常驻。没有合适回复时该项记“未验证”，不要编造聊天测试。
 
 升级已有部署前暂停并等待周期结束，使用 SQLite backup 接口备份账本、备份配置及当前提交，逐项迁移，不重新 init。暂不提供一键接管作者旧部署；新仓库接旧数据前必须核对 schema、配置、服务路径和历史未知发送状态，避免丢账后重复联系。

@@ -1,6 +1,23 @@
 {
   "parallelWorkflows": true,
-  "contactRecovery": {"perRun": 3, "minutes": 2, "maxAttempts": 3, "retryMinutes": 30},
-  "inboxRetry": {"baseMinutes": 30, "maxMinutes": 240, "escalateAfter": 3, "readRetryMinRemainingMs": 60000},
-  "businessHealth": {"failureCycles": 3, "minReadFailures": 3}
+  "supervisor": {
+    "pollMs": 60000,
+    "workerTimeoutMs": 900000,
+    "terminationGraceMs": 10000,
+    "stateTimeoutMs": 15000,
+    "notificationTimeoutMs": 75000
+  },
+  "contactRecovery": {
+    "perRun": 3,
+    "minutes": 2,
+    "maxAttempts": 3,
+    "retryMinutes": 30
+  },
+  "inboxRetry": {
+    "baseMinutes": 30,
+    "maxMinutes": 240,
+    "escalateAfter": 3,
+    "readRetryMinRemainingMs": 60000
+  },
+  "businessHealth": { "failureCycles": 3, "minReadFailures": 3 }
 }
