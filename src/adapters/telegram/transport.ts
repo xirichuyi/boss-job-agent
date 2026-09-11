@@ -1,8 +1,10 @@
 import { AGENT } from "../../config/agent.ts";
 import fs from "node:fs";
 import { atomicJson } from "../../storage/state.ts";
+import { telegramSettings } from "../../config/telegram.ts";
 
 export async function telegramCall(token, method, payload, fetcher = fetch) {
+  const settings = telegramSettings(); // Invalid configuration is not a network error.
   try {
     const response = await fetcher(
       `https://api.telegram.org/bot${token}/${method}`,
@@ -10,7 +12,7 @@ export async function telegramCall(token, method, payload, fetcher = fetch) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(settings.requestTimeoutMs),
       },
     );
     const result = await response.json();
@@ -46,6 +48,7 @@ export function pairingChat(updates, config, now = Date.now()) {
 }
 
 export async function flushTelegram(root, fetcher = fetch) {
+  const settings = telegramSettings();
   const secretPath = root + "/memory/telegram-secrets.json",
     configPath = root + "/memory/telegram-config.json";
   if (!fs.existsSync(secretPath) || !fs.existsSync(configPath))
@@ -79,14 +82,14 @@ export async function flushTelegram(root, fetcher = fetch) {
         !a.telegram?.messageId &&
         !(Date.parse(a.telegram?.retryAt || "") > Date.now()),
     )
-    .slice(0, 1)) {
+    .slice(0, settings.alertsPerFlush)) {
     if (Date.parse(alert.telegram?.retryAt || "") > Date.now()) continue;
     const title =
       alert.kind === "authentication"
         ? "需要你扫码登录或完成人机验证"
         : "求职 Agent 有待处理事项";
     // Keep personal resume/chat contents out of the notification payload.
-    const text = `${title}\n${String(alert.reason || "").slice(0, 350)}\n告警编号：${alert.id}\n浏览器：${AGENT.browser.publicUrl}`;
+    const text = `${title}\n${String(alert.reason || "").slice(0, settings.alertReasonMaxChars)}\n告警编号：${alert.id}\n浏览器：${AGENT.browser.publicUrl}`;
     const sent = await telegramCall(
       token,
       "sendMessage",
@@ -102,7 +105,12 @@ export async function flushTelegram(root, fetcher = fetch) {
       : {
           errorCode: sent.code,
           retryAt: new Date(
-            Date.now() + Math.max(60, sent.retryAfter || 300) * 1000,
+            Date.now() +
+              Math.max(
+                settings.alertRetryMinSeconds,
+                sent.retryAfter || settings.alertRetrySeconds,
+              ) *
+                1000,
           ).toISOString(),
         };
     if (sent.ok) count++;

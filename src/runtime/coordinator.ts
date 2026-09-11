@@ -2,6 +2,8 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { supervisorConfig } from "./scheduler.ts";
 import fs from "node:fs";
 import { configFile } from "../config/files.ts";
+import { validateTelegramSettings } from "../config/telegram.ts";
+import { validateBrowserRuntime } from "../config/browser-runtime.ts";
 
 export function executionConfig() {
   const config = JSON.parse(fs.readFileSync(configFile("execution"), "utf8"));
@@ -46,6 +48,8 @@ export function executionConfig() {
   )
     throw Error("业务健康配置无效");
   config.supervisor = supervisorConfig(config.supervisor);
+  config.telegram = validateTelegramSettings(config.telegram);
+  config.browser = validateBrowserRuntime(config.browser);
   return config;
 }
 

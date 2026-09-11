@@ -1,4 +1,5 @@
 import { ROOT } from "../src/project-root.ts";
+import { telegramSettings } from "../src/config/telegram.ts";
 import { telegramCall } from "../src/adapters/telegram/transport.ts";
 import { harness } from "../src/storage/harness.ts";
 import {
@@ -10,6 +11,7 @@ import {
   answerQuestion,
 } from "../src/adapters/telegram/chat.ts";
 const root = ROOT;
+const settings = telegramSettings();
 const statePath = root + "/memory/telegram-chat-state.json";
 const config = readJson(root + "/memory/telegram-config.json");
 const { token } = readJson(root + "/memory/telegram-secrets.json");
@@ -36,7 +38,7 @@ for (;;) {
     const updates = await telegramCall(token, "getUpdates", {
       offset: state.offset,
       timeout: 0,
-      limit: 50,
+      limit: settings.updatesPerPoll,
       allowed_updates: ["message"],
     });
     if (!updates.ok) {
@@ -69,10 +71,15 @@ for (;;) {
         item.status = "sent";
         item.messageId = response.result.message_id;
         state.history.push({ user: item.text, assistant: item.answer });
-        state.history = state.history.slice(-50);
+        state.history = state.history.slice(-settings.historyEntries);
       } else
         item.retryAt = new Date(
-          Date.now() + Math.max(30, response.retryAfter || 60) * 1000,
+          Date.now() +
+            Math.max(
+              settings.replyRetryMinSeconds,
+              response.retryAfter || settings.replyRetrySeconds,
+            ) *
+              1000,
         ).toISOString();
       save();
     }
@@ -86,5 +93,5 @@ for (;;) {
       JSON.stringify({ state: "chat_error", at: new Date().toISOString() }),
     );
   }
-  await new Promise((r) => setTimeout(r, 3000));
+  await new Promise((r) => setTimeout(r, settings.pollMs));
 }

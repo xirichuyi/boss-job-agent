@@ -1,5 +1,27 @@
 {
   "parallelWorkflows": true,
+  "browser": {
+    "discoveryTimeoutMs": 5000,
+    "connectTimeoutMs": 5000,
+    "commandTimeoutMs": 20000,
+    "apiReadTimeoutMs": 12000,
+    "navigationChecks": 10,
+    "navigationPollMs": 500
+  },
+  "telegram": {
+    "pollMs": 3000,
+    "requestTimeoutMs": 10000,
+    "updatesPerPoll": 50,
+    "historyEntries": 50,
+    "answerMaxChars": 3500,
+    "questionMaxChars": 8000,
+    "alertReasonMaxChars": 350,
+    "alertsPerFlush": 1,
+    "replyRetryMinSeconds": 30,
+    "replyRetrySeconds": 60,
+    "alertRetryMinSeconds": 60,
+    "alertRetrySeconds": 300
+  },
   "supervisor": {
     "pollMs": 60000,
     "workerTimeoutMs": 900000,

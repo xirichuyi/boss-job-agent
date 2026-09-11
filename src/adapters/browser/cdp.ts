@@ -1,4 +1,8 @@
 import { AGENT } from "../../config/agent.ts";
+import {
+  browserRuntimeSettings,
+  type BrowserRuntimeSettings,
+} from "../../config/browser-runtime.ts";
 import { searchCities } from "../../config/job-filters.ts";
 import { parseCompanySize } from "../../domain/ranker.ts";
 
@@ -15,14 +19,16 @@ export class BossTools {
   sequence: number;
   ws: WebSocket;
   onEvent?: (message: any) => void;
+  settings: BrowserRuntimeSettings;
   constructor() {
+    this.settings = browserRuntimeSettings();
     this.pending = new Map();
     this.sequence = 0;
   }
   async connect(targetId?: string) {
     const targets = await fetch(
       AGENT.browser.cdpUrl.replace(/\/$/, "") + "/json/list",
-      { signal: AbortSignal.timeout(5000) },
+      { signal: AbortSignal.timeout(this.settings.discoveryTimeoutMs) },
     ).then((r) => r.json());
     const target = targets.find((t) => {
       try {
@@ -57,7 +63,7 @@ export class BossTools {
       const timer = setTimeout(() => {
         this.ws.close();
         reject(new Error("CDP连接超时"));
-      }, 5000);
+      }, this.settings.connectTimeoutMs);
       this.ws.onopen = () => {
         clearTimeout(timer);
         resolve();
@@ -76,7 +82,7 @@ export class BossTools {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`${method} 超时`));
-      }, 20000);
+      }, this.settings.commandTimeoutMs);
       this.pending.set(id, { resolve, reject, timer });
       this.ws.send(JSON.stringify({ id, method, params }));
     });
@@ -96,7 +102,7 @@ export class BossTools {
       timeout = error;
     }
     // A timeout is not proof that navigation failed. Observe without navigating again.
-    for (let attempt = 0; attempt < 10; attempt++) {
+    for (let attempt = 0; attempt < this.settings.navigationChecks; attempt++) {
       const r = await this.call("Runtime.evaluate", {
         expression:
           "({url:location.href,ready:document.readyState,hasBody:!!document.body})",
@@ -114,7 +120,9 @@ export class BossTools {
         if (/verify|passport/.test(actual.pathname))
           throw new Error("导航进入登录或验证页，需要人工处理");
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.settings.navigationPollMs),
+      );
     }
     throw new Error("目标页面未就绪，已停止；未重复导航");
   }
@@ -129,7 +137,7 @@ export class BossTools {
       if(location.origin!=='https://www.zhipin.com') throw new Error('页面来源变化');
       if(!document.body) throw new Error('页面尚未就绪：正文为空，暂停接口操作');
       if(/安全验证|异常访问|访问受限|请先登录/.test(document.body.innerText)) throw new Error('需要人工处理登录或验证');
-      const r=await fetch(${JSON.stringify(relative)},{credentials:'same-origin',signal:AbortSignal.timeout(12000)});
+      const r=await fetch(${JSON.stringify(relative)},{credentials:'same-origin',signal:AbortSignal.timeout(${this.settings.apiReadTimeoutMs})});
       if(!r.ok) throw new Error('HTTP '+r.status);
       const j=await r.json();
       if(j.code!==0) throw new Error('BOSS业务错误 '+j.code);
@@ -204,7 +212,7 @@ export class BossTools {
       const reason = !job.location.startsWith(city.name)
         ? "城市不匹配"
         : !size || size.minimum < AGENT.search.minimumCompanySize
-          ? "企业不足500人或规模未知"
+          ? `企业不足${AGENT.search.minimumCompanySize}人或规模未知`
           : job.contacted
             ? "已经联系"
             : !job.valid
@@ -228,7 +236,8 @@ export const toolDefinitions = [
   },
   {
     name: "search_jobs",
-    description: "搜索杭州岗位并剔除500人以下、未知规模及已联系岗位",
+    description:
+      "搜索配置中的首个城市，按配置的企业规模下限剔除不合格、未知规模及已联系岗位",
     inputSchema: {
       type: "object",
       properties: {

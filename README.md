@@ -14,6 +14,8 @@
 代码放在我确认的 /opt 工作目录。先运行 npm ci，再使用 npm run setup 生成独立私密配置目录；通过 BOSS_CONFIG_DIR 指向该目录，所有 CLI、后台服务、浏览器启动器保持一致。
 agent.json 管理规模、关键词、频率、额度、附件名和程序路径；job-filters.json 管理城市、薪资和岗位类型；model.json 管理模型和推理强度；execution.json 管理并行和恢复策略。不要再写 agent.search.city/cityCode，不把偏好硬编码进代码或提示词。
 
+浏览器基础超时、Telegram 轮询/重试/文本预算也在 execution.json 中配置，字段与升级说明见 [运行参数配置](docs/RUNTIME-CONFIG.md)。
+
 配置向导只生成配置，不会安装软件、填写简历、初始化账本、登录或授权发送。读取我提供的真实经历到私密 candidate-profile.md，文件0600、目录0700；不要猜测履历、薪资、到岗日期。令牌只写私密文件，不输出、不提交。
 
 运行 npm run doctor -- --offline 检查本机，再配置非root Chromium、独立用户目录及本地监听端口。通过SSH隧道或有身份认证的网关让我扫码，不关闭sandbox、不直接暴露CDP/VNC/noVNC。只对全新目录执行 npm run init。打开岗位页和聊天页，再运行 npm run doctor、npm run health、npm run status；区分检查成功与尚未验证的模型权限/附件/真实发送。
@@ -93,7 +95,7 @@ node scripts/scheduler.ts --once
 | agent.json | 规模与平台规模档位、关键词、岗位方向、调度额度、工作流预算、附件名、浏览器与程序路径 |
 | job-filters.json | cities（名称和平台编码）、薪资下限、实习排除、原生薪资/岗位类型档位、联系人扫描参数 |
 | model.json | 模型与推理强度，不自动切换其他模型 |
-| execution.json | 并行开关与联系人恢复预算 |
+| execution.json | 并行、恢复、监督器、浏览器超时及 Telegram 运行参数 |
 | candidate-profile.md | 本人资料，私密、不提交 |
 | memory/ | SQLite账本、回执、日志和可选Telegram配置，私密、不提交 |
 

@@ -1,4 +1,5 @@
 import { AGENT } from "../../config/agent.ts";
+import { telegramSettings } from "../../config/telegram.ts";
 import { searchCities } from "../../config/job-filters.ts";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -180,10 +181,13 @@ export function answerQuestion(root, question, history, runner = spawnSync) {
   if (run.status !== 0 || !fs.existsSync(output))
     return "求职 Codex 本次回答失败或超时，投递定时器不受影响。你可以发送 /status 查看实际状态，稍后再提问。";
   const result = fs.readFileSync(output, "utf8").trim();
-  return result ? result.slice(0, 3500) : "Codex 未返回内容，请稍后重试。";
+  return result
+    ? result.slice(0, telegramSettings().answerMaxChars)
+    : "Codex 未返回内容，请稍后重试。";
 }
 
 export function ingest(state, updates, chatId) {
+  const settings = telegramSettings();
   for (const u of updates) {
     if (!Number.isSafeInteger(u.update_id) || u.update_id < (state.offset || 0))
       continue;
@@ -193,7 +197,7 @@ export function ingest(state, updates, chatId) {
     )
       state.queue.push({
         id: u.update_id,
-        text: u.message.text.slice(0, 8000),
+        text: u.message.text.slice(0, settings.questionMaxChars),
         status: "queued",
       });
     state.offset = Math.max(state.offset || 0, u.update_id + 1);
