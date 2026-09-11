@@ -9,24 +9,25 @@
 复制给安装 Agent：
 
 ```text
-请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、ARCHITECTURE，并检查系统、现有服务、Node.js、浏览器和 Codex CLI。先列变更清单，不覆盖已有代码、账本、浏览器目录或 systemd unit。
+请安装 https://github.com/xirichuyi/boss-job-agent，并按以下验收阶段推进，不仅启动一个进程就宣称完成。
 
-代码放在我确认的 /opt 工作目录。先运行 npm ci，再使用 npm run setup 生成独立私密配置目录；通过 BOSS_CONFIG_DIR 指向该目录，所有 CLI、后台服务、浏览器启动器保持一致。
-agent.json 管理规模、关键词、频率、额度、附件名和程序路径；job-filters.json 管理城市、薪资和岗位类型；model.json 管理模型和推理强度；execution.json 管理并行和恢复策略。不要再写 agent.search.city/cityCode，不把偏好硬编码进代码或提示词。
+1. 先读 README.md、SECURITY.md、ARCHITECTURE.md、docs/ARCHITECTURE-DECISION.md 和 docs/DEPLOYMENT-ACCEPTANCE.md。检查系统、架构、现有同名服务、端口和目录，列出变更计划。代码放我确认的 /opt 工作目录；已有安装必须先暂停并等在途任务结束、备份完整 SQLite 和私密配置，不覆盖、不重新 init、不丢弃未知发送记录。
 
-浏览器基础超时、Telegram 轮询/重试/文本预算也在 execution.json 中配置，字段与升级说明见 [运行参数配置](docs/RUNTIME-CONFIG.md)。
+2. 确认我的城市、薪资、公司规模、岗位方向、每日额度、模型及推理强度、真实简历和平台附件名，不照搬作者账号或经历。确认三个独立绝对路径：代码目录、BOSS_DATA_DIR 数据目录、BOSS_CONFIG_DIR 配置目录。个人资料写入数据目录的 candidate-profile.md；数据目录0700、资料和密钥0600。BOSS_RPA_DATA_DIR 是另一个浏览器用户目录变量，不要混用。
 
-支持代码与数据分离：`BOSS_DATA_DIR` 指向独立数据目录（放 candidate-profile.md 和 memory），`BOSS_CONFIG_DIR` 指向私密配置目录。环境变量必须同时设置到 CLI 和 systemd 服务；未设置则兼容原地安装。已有用户不要直接切到空目录再初始化，否则会失去原账本的防重记录。搬迁前应暂停、备份并完整迁移原有状态。
+3. 按发行版安装 Node.js 24+、util-linux/flock、Codex CLI、Chromium/Chrome，以及服务器桌面需要的 Xvfb、fluxbox、x11vnc、noVNC/websockify、xdpyinfo。使用真实可执行文件绝对路径和非 root 运行用户；以最终服务用户完成 Codex 登录。不要复制作者凭据，不输出令牌，不关闭浏览器 sandbox，不自动切换付费模型。
 
-本地隔离安装验收：`npm run test:install -- /opt/work_projects`。重新安装依赖并跑测试和关闭发送的启动流程，输出验收报告路径；不会改动正在运行的实例，不会联系 HR。其他电脑可省略目录参数，使用系统临时目录。
+4. 在代码目录执行 npm ci、npm run check、npm run test:install -- /opt/work_projects。用 npm run setup -- --answers 本人答案文件 --output 新配置目录生成四份配置；参考 examples/setup-answers.json，不用交互命令卡住。agent.json 管偏好/额度/附件/程序路径，job-filters.json 管城市/薪资/类型，model.json 管模型，execution.json 管超时/恢复/Telegram预算。全部写配置，不改业务源码。所有后续 CLI 和服务都设置同一 BOSS_DATA_DIR、BOSS_CONFIG_DIR。
 
-配置向导只生成配置，不会安装软件、填写简历、初始化账本、登录或授权发送。读取我提供的真实经历到私密 candidate-profile.md，文件0600、目录0700；不要猜测履历、薪资、到岗日期。令牌只写私密文件，不输出、不提交。
+5. 仅全新空数据目录运行 npm run init，保持 enabled=false、automationReady=false。填写本人资料，执行 npm run doctor -- --offline。doctor 不安装软件；缺项应修复，不忽略报错。
 
-运行 npm run doctor -- --offline 检查本机，再配置非root Chromium、独立用户目录及本地监听端口。通过SSH隧道或有身份认证的网关让我扫码，不关闭sandbox、不直接暴露CDP/VNC/noVNC。只对全新目录执行 npm run init。打开岗位页和聊天页，再运行 npm run doctor、npm run health、npm run status；区分检查成功与尚未验证的模型权限/附件/真实发送。
+6. 按 README 启动非 root 可视浏览器并保持桌面进程常驻，使用独立浏览器目录。CDP/VNC/noVNC只本地监听，通过 SSH 隧道或已有认证网关让我扫码；不要擅自改 DNS 或公网暴露端口。打开岗位和聊天页，运行 npm run doctor、npm run health、npm run status。人工完成扫码/验证；确认模型账号权限和平台附件名，不能把页面可达当成全部通过。
 
-保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.ts --once 或真实发送。授权后首次 perRun=1，以平台送达回执验收。服务模板要审核路径、用户、权限和 BOSS_CONFIG_DIR；不要强杀正在等待回执的发送。Telegram仅用于查询、验证提醒和恢复耗尽的去重告警。
+7. 先保持调度常驻服务未启动，向我说明即将真实联系 HR，并等待明确授权。确认首次 perRun=1，再执行 node scripts/enable.ts --confirm-real-sends 和 node scripts/scheduler.ts --once。这会真实发送。以平台定制正文和送达回执验收，不能把默认招呼或 completed 当成成功。真实 HR 回复和请求简历出现时分别验证回复/附件，没有场景记为未验证，不伪造对话。
 
-交付实际配置路径、服务状态、测试结果、未验证项与恢复办法。不要把 active/completed 当成已投递，不承诺绝对无人值守。
+8. 首轮验收后审核 deploy 模板，替换 @ROOT@（代码）、@USER@、@NODE@，配置用户、工作目录、两项环境变量和最小权限，再安装常驻服务；不覆盖已有 unit。Telegram可选，令牌和本人私聊绑定写数据目录的 memory 私密文件，验证 /status 和 /run 队列；不群发或逐步播报。watchdog 可选，核对它管理调度服务的权限，不授予任意 sudo。浏览器桌面也需常驻，不能只依赖当前 SSH 窗口。
+
+9. 交付提交版本、实际路径、启动/暂停/恢复命令、服务状态、验收报告，以及“离线检查/现场无发送/真实送达”各自通过和未验证项。至少观察后续定时周期和业务错误；遇到联系人定位失败、未读漏处理、详情失败或未知回执时保留日志定位，不用无限重启掩盖。不能承诺无人工介入或绝对稳定。
 ```
 
 ## 快速开始
@@ -92,6 +93,10 @@ node scripts/scheduler.ts --once
 
 ## 生效配置
 
+`BOSS_DATA_DIR` 指定资料和 memory 数据目录；`BOSS_CONFIG_DIR` 指定四份配置目录。未指定数据目录时默认使用代码目录。旧 BOSS_AGENT_ROOT 仍作为数据目录别名兼容，BOSS_DATA_DIR 优先。已有账本不得通过切到空目录再 init 来“升级”。
+
+浏览器与 Telegram 的运行参数见 [运行配置](docs/RUNTIME-CONFIG.md)。隔离安装验收使用 `npm run test:install -- /opt/work_projects`，保留报告，不连接浏览器、调用模型或发送消息。
+
 推荐用 **BOSS_CONFIG_DIR 指定一个完整配置目录**。未指定时使用仓库 config/。四份文件不隐式合并，缺失即报错；状态命令显示实际配置及来源路径。
 
 | 文件 | 唯一职责 |
@@ -131,7 +136,7 @@ scheduler.ts（进程监督，15分钟硬超时）
 
 ## 常驻运行、暂停与升级
 
-审核 deploy/ 中模板并替换 @ROOT@、@USER@、@NODE@。代码路径、执行用户、私密目录与Codex账号必须对应。每个使用配置的unit都应设置同一个 `Environment="BOSS_CONFIG_DIR=/绝对路径"`。不要覆盖已有同名服务。
+审核 deploy/ 中模板并替换 @ROOT@（代码目录）、@USER@、@NODE@。代码路径、执行用户、私密目录与Codex账号必须对应。每个业务unit都应设置同一个 `Environment="BOSS_CONFIG_DIR=/绝对配置路径"` 和 `Environment="BOSS_DATA_DIR=/绝对数据路径"`。浏览器目录由独立的 BOSS_RPA_DATA_DIR 管理。不要覆盖已有同名服务。
 
 ```bash
 sudo systemctl daemon-reload
@@ -159,7 +164,7 @@ execution.json.contactRecovery 默认每轮最多3人、2分钟，失败间隔30
 
 Telegram可选：令牌存 memory/telegram-secrets.json，私聊绑定存 memory/telegram-config.json，权限0600。令牌结构为 {"token":"自己的令牌"}。填写本人核实的chatId，或配置pairCode、pairIssuedAt、pairExpiresAt后使用私聊配对；不猜测ID，不从群聊绑定。
 
-/status 不调用模型；自然语言查询使用配置模型；/run 只入队，不越过暂停、验证或额度。只主动推送验证码和恢复耗尽的去重提醒，不逐步播报；断网时无法立即通知。
+/status 不调用模型；自然语言查询使用配置模型；/run 只入队，不越过暂停、验证或额度。只主动推送扫码/人机验证需求和恢复耗尽的去重提醒，不推送验证码，不逐步播报；断网时无法立即通知。
 
 ## 已知边界
 

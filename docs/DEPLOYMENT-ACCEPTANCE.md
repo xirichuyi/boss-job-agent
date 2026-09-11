@@ -4,7 +4,7 @@
 
 ## 一套完整目录、一套运行身份
 
-新用户使用一个完整 checkout，例如 `/opt/boss-job-agent`，代码、scripts、candidate-profile.md、memory 都在其中；私密四份配置可另放一处，通过 BOSS_CONFIG_DIR 指定。**不要将 BOSS_AGENT_ROOT 指到一个只有数据的目录**：目前仍有子进程从 ROOT/scripts 启动，它不是纯数据目录开关。
+新用户使用完整 checkout，例如 `/opt/work_projects/boss-job-agent`。代码和 scripts 固定从 checkout 加载；candidate-profile.md、memory 可放在独立的 BOSS_DATA_DIR 中；私密四份配置通过 BOSS_CONFIG_DIR 指定。未设置时兼容代码目录原地运行。BOSS_AGENT_ROOT 是旧数据目录别名，BOSS_DATA_DIR 优先。现有数据不会自动迁移，不得指向空目录重新 init 来代替升级。
 
 以同一个非 root 服务用户完成安装、Codex 登录、配置、初始化和常驻运行。浏览器独立用户也可以，但目录权限和本地 CDP 可达性须另行验证。不要复制作者的登录态、令牌或账本。Codex 是子进程调用，不依赖一直打开的交互会话或 tmux。
 
@@ -20,7 +20,7 @@
 | 刷岗、读 JD | application/search.ts | 原生筛选响应证据、读取数量、跳过原因 |
 | 首次联系并附话术 | application/outreach.ts | 平台实际出现定制正文，receipts 记录送达；默认招呼不代表正文成功 |
 | 回复和附件 | application/inbox.ts | 新 HR 消息被读到、回复送达；附件名与平台一致且有回执 |
-| 单人异常不拖停其他人 | contact-recovery.js、reconcile.ts | 隔离/重试原因和下次时间；其他联系人继续；未知结果不盲重发 |
+| 单人异常不拖停其他人 | application/contact-recovery.ts、application/reconcile.ts | 隔离/重试原因和下次时间；其他联系人继续；未知结果不盲重发 |
 | 查询与通知 | telegram-chat.ts、telegram-notify.ts | 可选私聊 /status；无逐步播报；断网不承诺即时告警 |
 
 ## 常驻服务必须与终端一致
@@ -29,6 +29,7 @@
 
 ```ini
 Environment="BOSS_CONFIG_DIR=/opt/boss-job-agent/config/private-local"
+Environment="BOSS_DATA_DIR=/opt/boss-job-agent-data"
 ```
 
 路径改为本人实际路径。审核用户可读写仓库和私密数据；Codex 登录必须属于实际执行用户。浏览器启动器也传入同一个配置目录。先前台验证，再按 README 安装 scheduler。Telegram 是可选独立服务；watchdog.service 配合 scripts/job-agent-watchdog.timer 安装，但须单独核实它是否有管理 scheduler 的权限，不默认授予任意 sudo。

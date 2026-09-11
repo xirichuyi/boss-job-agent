@@ -40,6 +40,8 @@ function run(name: string, binary: string, args: string[], expected = 0) {
 }
 try {
   for (const name of [
+    "README.md",
+    "docs",
     "src",
     "scripts",
     "test",
