@@ -1,7 +1,8 @@
 import fs from 'node:fs';
+import { configFile } from './config-files.js';
 
 export function loadJobFilters() {
-  const c = JSON.parse(fs.readFileSync(process.env.BOSS_JOB_FILTERS_CONFIG || new URL('../config/job-filters.json', import.meta.url), 'utf8'));
+  const c = JSON.parse(fs.readFileSync(configFile('job-filters'), 'utf8'));
   if (!Number.isFinite(c.minimumMonthlySalaryK) || c.minimumMonthlySalaryK < 0 || typeof c.excludeInternships !== 'boolean' || c.unknownSalaryAction !== 'skip') throw Error('岗位薪资/实习配置无效');
   if (!Number.isInteger(c.conversationPages) || c.conversationPages<1 || c.conversationPages>100 || !Number.isInteger(c.conversationLookupMs) || c.conversationLookupMs<1000 || c.conversationLookupMs>60000) throw Error('会话查找配置无效');
   return c;

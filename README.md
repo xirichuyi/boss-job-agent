@@ -1,153 +1,166 @@
 # BOSS Job Agent
 
-基于 Codex CLI 和可视化 Chromium 的个人求职助手：读取岗位 JD 与个人资料，生成针对岗位的消息，通过 BOSS 原生页面联系 HR，并集中处理已有聊天。
+基于 Codex CLI 与可视化 Chromium 的个人求职助手：搜索岗位、读取 JD、生成定制消息，并处理已有 HR 会话。
 
-**实验性、自托管项目。默认不发送，不绕过扫码、人机验证或平台限制。不是 BOSS 官方项目，不保证持续可用、每天联系满额或获得面试。** 使用前确认平台规则与账号授权；只对相关岗位进行合理、个性化沟通，不用于群发骚扰。
+**实验性、自托管、非 BOSS 官方项目。默认不发送，不绕过扫码、人机验证和平台限制。** 平台 DOM、账号权限和网络变化仍可能需要人工处理。当前主要支持 Linux 服务器；不是跨平台一键安装包。
 
 ## 交给 Agent 安装的提示词
 
-复制以下内容给你自己的安装 Agent：
+复制给安装 Agent：
 
 ```text
-请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、config 和 deploy 模板，并检查本机系统、Node/Python、Codex CLI 登录、模型权限以及已有服务；不要覆盖现有项目、数据库、浏览器用户目录或 systemd unit。
+请部署 https://github.com/xirichuyi/boss-job-agent 。先读 README、SECURITY、ARCHITECTURE，并检查系统、现有服务、Node/Python、浏览器和 Codex CLI。先列变更清单，不覆盖已有代码、账本、浏览器目录或 systemd unit。
 
-先给出具体变更清单，再安装缺少的依赖。代码放在我确认的 /opt 工作目录；Chromium 用非 root 用户和独立用户目录。模型/推理强度只改 config/model.json；城市、城市代码、公司规模、关键词、频率、额度、附件名、CDP 和网页地址只改 config/agent.json，不写死进代码或提示词。读取我提供的真实资料到私密 candidate-profile.md；不要推测学历、经历、薪资或到岗承诺。密钥仅保存于 0600 的本地私密配置，不输出、不提交。
+代码放在我确认的 /opt 工作目录。先运行 npm ci，再使用 npm run setup 生成独立私密配置目录；通过 BOSS_CONFIG_DIR 指向该目录，所有 CLI、后台服务、浏览器启动器保持一致。
+agent.json 管理规模、关键词、频率、额度、附件名和程序路径；job-filters.json 管理城市、薪资和岗位类型；model.json 管理模型和推理强度；execution.json 管理并行和恢复策略。不要再写 agent.search.city/cityCode，不把偏好硬编码进代码或提示词。
 
-运行 npm ci、Node/Python 测试和安全初始化。配置浏览器仅本地监听，通过 SSH 隧道或有身份认证的网关让我人工扫码；不绕过验证码，不关闭 Chromium sandbox，不直接暴露 CDP/VNC/noVNC。先做只读健康检查，核对原生筛选和平台附件文件名。
+配置向导只生成配置，不会安装软件、填写简历、初始化账本、登录或授权发送。读取我提供的真实经历到私密 candidate-profile.md，文件0600、目录0700；不要猜测履历、薪资、到岗日期。令牌只写私密文件，不输出、不提交。
 
-默认保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或任何真实发送。不要为了测试消耗求职额度。Telegram 可选，只回复查询、推送人工验证及自动恢复耗尽提醒；验证私聊所有者后再绑定。
+运行 npm run doctor -- --offline 检查本机，再配置非root Chromium、独立用户目录及本地监听端口。通过SSH隧道或有身份认证的网关让我扫码，不关闭sandbox、不直接暴露CDP/VNC/noVNC。只对全新目录执行 npm run init。打开岗位页和聊天页，再运行 npm run doctor、npm run health、npm run status；区分检查成功与尚未验证的模型权限/附件/真实发送。
 
-授权后先用 perRun=1 验证一轮，区分文本沟通、回复与附件发送，以平台送达回执验收，不把 active/completed 当成已投递。随后安装审核过的 systemd 模板，配置最小权限并验证重启、暂停和状态查询。给我交付路径、配置清单、服务状态、实际测试结果、未验证项和恢复办法；不要声称已经实现绝对无人值守。
+保持 enabled=false、automationReady=false。未经我明确确认，不执行 enable --confirm-real-sends、scheduler.py --once 或真实发送。授权后首次 perRun=1，以平台送达回执验收。服务模板要审核路径、用户、权限和 BOSS_CONFIG_DIR；不要强杀正在等待回执的发送。Telegram仅用于查询、验证提醒和恢复耗尽的去重告警。
+
+交付实际配置路径、服务状态、测试结果、未验证项与恢复办法。不要把 active/completed 当成已投递，不承诺绝对无人值守。
 ```
 
-## 工作方式
+## 快速开始
 
-```text
-Python 定时器 / 手动请求 / Telegram /run
-    → SQLite 请求队列、执行租约、额度预留
-    → 搜索岗位 → 读取 JD → Codex 批量决策
-    → 逐个核对公司和聊天 → 原生页面发送 → 保存送达回执
-    → 轮询已有聊天 → 回复 / 按请求发送指定附件
-```
+要复现完整常驻流程，参见 [部署与逐项验收](docs/DEPLOYMENT-ACCEPTANCE.md)。代码测试、现场检查、真实送达是三种不同的验收，不能互相替代。
 
-模型只生成结构化决策，不直接操作浏览器。最多三份 JD 合并为一次模型调用，正文逐个发送；不做第二次 AI 审稿，也不使用关键词、第一人称或文案字数的代码拦截。岗位 ID 对应、消息非空、动作结构、运行授权、同公司去重和回执确认仍由程序执行。
-
-平台当前聊天包含人工发送的信息。`completed` 不等于已投递，必须看 `result` 和 `receipts`。发送结果不明时隔离联系人，不自动重复点击；没有平台幂等键，不能承诺 exactly-once。
-
-## 配置：修改配置，不改代码
-
-| 文件 | 用途 |
-| --- | --- |
-| `config/model.json` | Codex 模型、推理强度；默认 `gpt-5.6-luna` / `high`，需要账号有调用权限 |
-| `config/job-filters.json` | `cities` 为搜索城市及平台编码（优先于旧单城市设置）；月薪下限、实习排除、API 档位及会话查找上限也在这里；默认月薪下限11K |
-
-搜索时由浏览器原生筛选控件发起 BOSS 岗位 API 请求，并核对实际请求与响应，非 AI 判断基础门槛。默认 `nativeJobType: 1901`（全职），`nativeSalaryCodes: [405,406,407]`（10–20K、20–50K、50K以上）。薪资为单选，每遍历全部城市和关键词切换一个薪资档位；城市来自 `job-filters.json`，规模来自 `agent.json`，学历和经验不限制。平台没有精确11K档位，因此返回后仍由本地代码核对月薪下限，再交给 AI 阅读 JD。原生筛选编码属于平台协议，平台变更时需重新验证。
-
-多城市运行：编辑 `config/job-filters.json` 的 `cities`，默认杭州、深圳、成都、南京。每次搜索轮换城市，四城都搜过后再换关键词，遍历全部城市与关键词后切换薪资档位。城市以此配置为准，规模和关键词仍来自 `agent.json`。四城共用每日联系上限，不是每城各自一份额度。
-
-每轮搜索岗位与处理 HR 消息并行推进，各自有时间预算，不必等刷完岗位再回复。聊天窗口的切换、读取、发送共用互斥队列，已排队的回复优先；首次联系到补充消息是一个不可交叉的操作。模型在后台线程运行，不阻塞浏览器；模型请求仍串行、岗位文案可批量，以保留额度记账和冷却边界。开关在 `config/execution.json` 的 `parallelWorkflows`，设为 false 可回退串行。
-
-回复优先检查已知未读联系人，并轮询已读会话（人工点开不代表已经答复）。联系人不在当前列表时进行有上限的滚动查找；发完简历后继续判断同条消息里的其他问题。未核实身份/JD的陌生会话仍记录为待核实，不自动发送；平台验证、结果不明的发送和需要本人确认的承诺仍会暂停对应操作。
-| `config/agent.json` | 城市及平台城市编码、人数下限及原生规模档位、关键词、岗位方向、学历年限策略、调度额度、工作流预算、附件名、CDP/网页地址、Codex 路径与超时 |
-| `candidate-profile.md` | 本人的真实经历，私密、不入库到 Git |
-| `memory/telegram-secrets.json` | 可选 Telegram token，私密、不进 Git |
-| `memory/telegram-config.json` | 可选私聊绑定配置，私密、不进 Git |
-| `memory/harness.sqlite` | 运行状态、队列、额度、账本；不是用户偏好的第二份配置 |
-
-配置每个进程启动时加载并校验。调度器每轮启动新进程，自然读取新配置；Telegram 常驻进程需要重启。不要为改配置强杀正在等待发送回执的任务。JSON 状态文件仅为兼容导出，不要直接修改它们控制运行。
-
-需要私密配置时，将完整 agent.json 保存到 `config/private-agent.json`，以环境变量 `BOSS_AGENT_CONFIG` 指向它（已忽略 Git）；不合并多层默认值。配置可以从任意部署路径加载，代码不固定作者的服务器目录。
-
-城市名与 cityCode 应对应；公司人数和 nativeScaleCodes 应对应平台选项。默认 `[304,305,306]` 对应 500–999、1000–9999、10000 人以上。页面适配器目前只会从原生热门城市列表选择城市；没有对应选项时停止，不会猜测或继续发错城市。更改条件后先人工核对原生筛选是否生效。
-
-每天最多 70 位新 HR、每次模型批量最多 3 个岗位、单轮进程组最多 15 分钟是当前安全/协议边界。业务参数只能在校验范围内调整。时间配额按 `Asia/Shanghai` 自然日结算，尚不支持跨时区配额迁移。
-
-## 安装与首次验证
-
-需要 Linux/systemd、Node.js 24、Python 3.11+、已安装并登录的 Codex CLI，以及可访问的有界面 Chromium。浏览器需 Xvfb、fluxbox、x11vnc、noVNC/websockify、xdpyinfo 等；不同发行版包名可能不同，安装前核对。Codex CLI 参数和模型权限可能随版本/账号变化，本项目不替你获取账号或凭据。
+前置：Linux、Node.js 24+、Python 3.11+、可用的 Codex CLI 与浏览器。systemd 仅用于服务器常驻服务。
 
 ```bash
 git clone https://github.com/xirichuyi/boss-job-agent.git
 cd boss-job-agent
 npm ci
 npm test
-python3 -m unittest discover -s test -p '*_test.py'
+npm run setup
+export BOSS_CONFIG_DIR="$PWD/config/private-local"
+npm run doctor -- --offline
+```
+
+向导默认写入 `config/private-local`（不进 Git），拒绝覆盖已有目录，首次每轮最多联系1位新HR。可用 `--output` 选择新目录；请使用向导打印的真实路径设置环境变量。
+
+安装 Agent 或非交互环境可以使用：
+
+```bash
+npm run setup -- --answers examples/setup-answers.json --dry-run
+```
+
+修改自己的答案文件后去掉 `--dry-run` 才会生成配置。答案示例不是本人简历。向导不会安装依赖、启动浏览器、改动已有账本或启用发送。
+
+仅全新安装执行：
+
+```bash
 npm run init
 cp examples/candidate-profile.md candidate-profile.md
 chmod 600 candidate-profile.md
 ```
 
-初始化不联网、不调用模型、不发送，不覆盖已有数据库。填写真实资料，并修改两个配置文件；`resumeFile` 必须与 BOSS 账号附件列表中的实际文件名完全一致。模型使用自己的 Codex 登录，订阅额度不等于 API 标价，high 可能增加推理 token 消耗。
+填写本人真实资料。`resumeFile` 必须与 BOSS 附件列表中的文件名一致。默认模型需要自己的账号具备权限，doctor 不会为验证权限消耗模型额度。
 
-浏览器辅助脚本为 `scripts/start-desktop.sh`：以**非 root 用户**运行 Chromium，不添加 `--no-sandbox`。默认数据目录 `/var/lib/boss-rpa` 需先交给浏览器用户所有，或通过 `BOSS_RPA_DATA_DIR` 指定其可写目录。图形参数可用 `DISPLAY_NUMBER`、`SCREEN_SIZE`、`NOVNC_WEB_ROOT`、`START_URL` 环境配置。程序路径与三个端口均读取 `config/agent.json` 的 browser 配置，默认 CDP 9222、VNC 5900、noVNC 6080；端口冲突会报错。CDP 只接受本机地址，远程浏览器通过 SSH 隧道连接。
+### 浏览器与扫码
 
-**仅本地监听，禁止直接暴露这些端口。** 通过 SSH 隧道访问 noVNC，或自己部署并验证 Cloudflare Access 等认证网关。项目不附带作者的域名、隧道、Google 登录配置或任何账号。人工扫码登录后打开岗位搜索页与聊天页，执行只读检查：
+`scripts/start-desktop.sh` 需 Xvfb、fluxbox、x11vnc、noVNC/websockify、xdpyinfo 和 Chromium；依赖需按发行版安装，doctor 不会自动安装它们。以**非 root 用户**运行，不添加 `--no-sandbox`。
+
+默认浏览器目录 `/var/lib/boss-rpa` 必须归浏览器用户所有，或通过 `BOSS_RPA_DATA_DIR` 指定可写目录。默认 CDP/VNC/noVNC 为9222/5900/6080，读取 agent.json；图形参数由 DISPLAY_NUMBER、SCREEN_SIZE、NOVNC_WEB_ROOT、START_URL 配置。
+
+**端口仅本地监听，通过 SSH 隧道或已验证的认证网关访问。** 不附带作者域名、Cloudflare配置或账号。人工扫码并打开岗位页、聊天页后：
 
 ```bash
-node scripts/browser-health.mjs
-node scripts/agent-status.mjs
+npm run doctor
+npm run health
+npm run status
 ```
 
-只有本人确认筛选、资料、附件和真实发送授权后，才执行：
+doctor 给出逐项结果、修复建议；`--json` 输出机器可读报告。`--offline` 不访问浏览器接口。检查不发送、不调用模型；看到标签页不等于已验证登录、模型权限或附件。
+
+本人确认筛选、资料和发送授权后才执行：
 
 ```bash
 node scripts/enable.mjs --confirm-real-sends
 python3 scripts/scheduler.py --once
 ```
 
-**最后一条会真实联系 HR，不是 dry-run。** 先把 perRun 设为 1，核对公司、文案与送达回执，再扩大额度。测试通过不代表平台端到端行为已验证。
+**最后一条会真实联系 HR，不是预览。** 先验收一轮送达回执，再扩大额度。
 
-## 持续运行
+## 生效配置
 
-服务模板见 `deploy/`。把 `@ROOT@`、`@USER@`、`@NODE@`、`@PYTHON@` 替换为部署路径、运行用户和真实可执行文件路径后，审核再安装到 `/etc/systemd/system/`。同一用户必须能读取项目私密文件并使用自己的 Codex 登录；Codex 路径在 agent.json 配置。
+推荐用 **BOSS_CONFIG_DIR 指定一个完整配置目录**。未指定时使用仓库 config/。四份文件不隐式合并，缺失即报错；状态命令显示实际配置及来源路径。
 
-不要在已有求职服务的服务器上直接覆盖同名 unit。不要同时运行旧控制器与新 Harness。首次部署先只运行 scheduler；需要外部自动恢复时再部署 watchdog，其启动/重启 systemd 服务需要管理员权限。Telegram 服务为可选项，未绑定时不要启动。
+| 文件 | 唯一职责 |
+| --- | --- |
+| agent.json | 规模与平台规模档位、关键词、岗位方向、调度额度、工作流预算、附件名、浏览器与程序路径 |
+| job-filters.json | cities（名称和平台编码）、薪资下限、实习排除、原生薪资/岗位类型档位、联系人扫描参数 |
+| model.json | 模型与推理强度，不自动切换其他模型 |
+| execution.json | 并行开关与联系人恢复预算 |
+| candidate-profile.md | 本人资料，私密、不提交 |
+| memory/ | SQLite账本、回执、日志和可选Telegram配置，私密、不提交 |
+
+旧 `BOSS_AGENT_CONFIG`、`BOSS_JOB_FILTERS_CONFIG` 单文件覆盖仍兼容，优先于目录；doctor 会提示弃用字段。旧 agent.search.city/cityCode 与 workflow.conversationPages 不再是生效来源。不要在状态JSON里修改偏好。
+
+默认轮换杭州、深圳、成都、南京，产品/开发方向，500人以上、月薪区间下限至少11K、非实习。城市会通过原生热门/字母分组选项定位，核对API响应城市码；未知编码需人工验证，不猜测。
+
+BOSS 薪资是单选档位：405/406/407对应10–20K、20–50K、50K以上。轮换全部城市、关键词、薪资档位后，本地代码再核对精确月薪下限，不由AI猜测。公司规模代码304/305/306对应500–999、1000–9999、10000人以上。
+
+修改偏好后用 `npm run status` 查看实际生效值，再人工核对平台筛选。常驻进程需重启加载进程级配置；不要强杀在途发送。多个城市共用每日额度，按 Asia/Shanghai 自然日结算，最多70位新HR。
+
+## 运行架构
+
+Python只负责分钟唤醒、OS文件锁和进程组超时；业务、浏览器、模型与SQLite状态均在JavaScript中。不维护两套业务逻辑。
+
+```text
+scheduler.py（进程监督，15分钟硬超时）
+  → scheduled-agent.mjs（授权、队列、租约、额度）
+    → run-cycle.mjs（生命周期、持久化、最终收尾）
+      → workflows/cycle-runner.js
+          ├─ 搜索 → JD → 批量文案 → 联系
+          └─ 对账/恢复 → 收件箱 → 回复/附件
+              共用聊天互斥队列；模型在后台线程中等待
+```
+
+搜索与收件箱并行，排队的回复优先，但不打断已开始的发送。正文由AI生成，不做第二轮AI审稿；岗位身份、非空消息、授权、防重、回执由程序核对。模型冷却只延后生成，不停止平台读取和无需新生成的恢复任务。
+
+`completed` 不等于发过消息，须查看 result、receipts 和各阶段统计。没有平台幂等键，不能承诺 exactly-once。
+
+## 常驻运行、暂停与升级
+
+审核 deploy/ 中模板并替换 @ROOT@、@USER@、@NODE@、@PYTHON@。代码路径、执行用户、私密目录与Codex账号必须对应。每个使用配置的unit都应设置同一个 `Environment="BOSS_CONFIG_DIR=/绝对路径"`。不要覆盖已有同名服务。
 
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now job-agent-scheduler.service
-node scripts/agent-status.mjs
-node scripts/harness-state.mjs enqueue
+npm run status
+node scripts/agent-control.mjs pause
+node scripts/agent-control.mjs resume
 ```
 
-暂停/恢复入口为 `node scripts/agent-control.mjs pause|resume`，维护为 `node scripts/agent-control.mjs maintenance 15`；这些操作会调用 systemctl，部署用户必须具备对应 unit 的管理权限。不要给予任意 systemctl/shell sudo 权限；由部署管理员配置最小权限，或在确认状态后由管理员执行。停止/维护可能中断在途发送，未知结果必须核对。
+pause/maintenance 禁止新发送但不直接停止服务，让在途回执完成；服务 active 不等于任务已启用。maintenance 接收分钟数，如 `maintenance 15`。resume 默认尝试启动systemd服务，需对应管理权限；前台运行可用 `resume --state-only`，然后手动运行调度器。不得因此授予任意sudo权限。
 
-## Telegram：查询桥梁，可选
+升级前暂停并等当前周期结束，备份完整SQLite及私密配置，记录当前Git提交。不要直接覆盖代码和正在写入的数据库；参见 [架构与审查记录](ARCHITECTURE.md)。尚无自动升级/回滚器，也尚未完成多操作系统安装验证。
 
-通过私密文件保存 token，权限 0600，不把 token 写进 shell 历史、提示词或 Git。`memory/telegram-secrets.json` 结构为 `{"token":"你的令牌"}`。`memory/telegram-config.json` 可以填写本人核实的私聊 `chatId`，或通过现有配对流程设置 `pairCode`、`pairIssuedAt`、`pairExpiresAt`，向机器人发送 `绑定求职<配对码>` 后运行 telegram-notify 完成绑定。禁止使用猜测或来自群聊的 ID。
+## 故障恢复和Telegram
 
-`/status` 不调用模型；自然语言问答使用同一模型配置；`/run` 只入队，不绕过暂停和额度。只主动推送扫码/人机验证及联系人恢复耗尽的去重汇总提醒，不播报每步操作或周期总结。绑定后再启用 Telegram unit。服务器断网时无法立即推送。
+发送前保存意图；发送结果不明时隔离联系人、保留额度，不盲重发。列表找不到HR时先用平台搜索匹配公司与姓名，再核对会话岗位。
 
-### 联系中断的恢复
+execution.json.contactRecovery 默认每轮最多3人、2分钟，失败间隔30分钟、累计最多3次。只有证明定制话术尚未进入发送、且当前仅有默认招呼时才补发；HR已回复则交给收件箱。记录阶段、原因、次数和下次时间，耗尽后提示人工处理，其他任务继续。
 
-聊天列表未定位到 HR 时，先用平台联系人搜索精确匹配公司和姓名，再核对会话岗位。首次联系失败只隔离该联系人，其他候选人继续；不因这种错误反复延长整轮等待。未确认发送仍保留额度，不报成发送成功。
+Telegram可选：令牌存 memory/telegram-secrets.json，私聊绑定存 memory/telegram-config.json，权限0600。令牌结构为 {"token":"自己的令牌"}。填写本人核实的chatId，或配置pairCode、pairIssuedAt、pairExpiresAt后使用私聊配对；不猜测ID，不从群聊绑定。
 
-`config/execution.json.contactRecovery` 控制恢复：默认每轮最多3人、2分钟，失败间隔30分钟、累计最多3次。只对有可靠记录证明定制话术尚未进入发送步骤、当前历史仅有默认招呼的会话补发；已经尝试发送但回执未知的消息只核对、不重发。HR已回复则移交正常收件箱流程。阶段、次数、原因、下次重试时间保存在联系人 `contactRecovery` 字段，恢复成功关闭对应告警；耗尽后保留人工处理状态并通知 Telegram，其他工作继续。
+/status 不调用模型；自然语言查询使用配置模型；/run 只入队，不越过暂停、验证或额度。只主动推送验证码和恢复耗尽的去重提醒，不逐步播报；断网时无法立即通知。
 
-## 目录与边界
+## 已知边界
 
-- `src/workflows/`：搜索、首次联系、集中回复、决策与统计。
-- `src/harness-store.js`：SQLite WAL/FULL、事务、请求、租约。
-- `src/visible-tools.js`：可见 UI 操作与原生网络响应证据；当前发送不是直接重放私有消息 API。
-- `scripts/`：生命周期、初始化、调度与诊断。
-- `prompts/`：表达、事实及数据/指令边界；不会硬编码某个求职者姓名。
-- `test/`：离线测试，不应访问真实账号或发送消息。
-- 旧 Web/API 控制器、试投脚本、旧审稿提示词没有纳入公开版；只有一套默认执行链路。
-
-## 已知不足 / 优先完善项
-
-- 翻页会识别内部滚动容器、原生“下一页”，按岗位ID变化识别虚拟列表，并逐页处理后再翻页。受配置页数和阶段预算限制；没有新增不代表全站已刷完。
-- 聊天列表会按配置页数扫描；已核实联系人在本轮批次中按未读优先处理，找不到的历史联系人会滚动定位。账本外未读写入私密 `memory/inbox-discovery.json` 并可通过 Telegram 查询，未核实身份、JD与求职条件前不自动回复陌生人。
-- 自动附件路径有实现和 mock 测试，但缺少广泛真实场景验证；同样不能承诺全链路无人值守。
-- 新的文字/附件发送会保存发送前消息ID基线；超时后只读对账，只有唯一新消息、精确正文与送达标记（附件还要求文件名）才恢复联系人，不重发、不退额度、不把人工消息计作Agent发送。旧记录缺少基线、首次默认招呼不明、附件回执不含文件名等情况继续隔离。平台DOM变更可能导致暂停。
-- 提示词不能保证模型永远准确；没有文案规则拦截或第二次审稿，使用者承担审核个人资料与观察输出的责任。
-- Codex 额度、网络、验证、账号限制都可能让任务暂停；没有自动切换其他付费模型。
-- 当前不是一键跨平台安装器，没有 Web 配置面板。systemd 最小权限需按部署环境配置。
+- 平台DOM变化、登录验证、限额仍会使部分操作暂停；测试通过不等于真实平台始终可用。
+- 陌生/人工联系但未核实JD的会话只记录待核实，不自动冒险回复；尚无可视化接管向导。
+- 扫描和翻页受预算限制，不代表遍历了所有岗位或未读消息。
+- 附件发送有实现和mock测试，但缺少广泛真实场景覆盖。
+- 模型输出不能保证永远准确；不编造履历，不擅自承诺面试时间或薪资。
+- 配置向导不是系统软件安装器；systemd权限、浏览器认证网关仍需部署者核对。
+- 当前仍保留Python监督层，未为统一语言重写可靠的进程组超时机制。
 
 ## 开源与隐私
 
-MIT。个人简历、聊天账本、历史日志、令牌和浏览器目录不在仓库。详见 [SECURITY.md](SECURITY.md) 和 [CONTRIBUTING.md](CONTRIBUTING.md)。
-
-## 社区链接
+MIT。简历、聊天、日志、令牌和浏览器目录不进Git。公开issue前必须脱敏，详见 [SECURITY.md](SECURITY.md)、[CONTRIBUTING.md](CONTRIBUTING.md)。
 
 [Linux DO 社区](https://linux.do/)

@@ -27,7 +27,7 @@ const queued = (harness()?.pending().length || 0) > 0;
 if (Date.parse(readState(root + '/memory/maintenance.json', {}).until || '') > Date.now()) { status('maintenance'); process.exit(0); }
 if (!config.enabled) { status('disabled'); process.exit(0); }
 const budget = cooldown(root);
-if (budget) { status('model_cooldown', { nextAt: budget.until, reason: MODEL + '限额，冷却期间不领取新任务、不调用模型' }); process.exit(0); }
+// Keep read/receipt/recovery tasks alive; only reserve new-contact quota when generation is available.
 if (!Number.isInteger(config.perRun) || config.perRun < 0 || config.perRun > 10 || !Number.isInteger(config.dailyNewContactLimit) || config.dailyNewContactLimit < 1 || config.dailyNewContactLimit > 70) throw new Error('Invalid contact limits');
 // Installing the timer does not imply that the send/receipt adapters are ready.
 if (!config.automationReady) { status('paused', { reason: config.phase }); process.exit(0); }
@@ -81,7 +81,7 @@ let quota = readState(quotaPath, { date, reserved: 0 });
 if (quota.date !== date) quota = { date, reserved: 0 };
 if (!Number.isInteger(quota.reserved) || quota.reserved < 0) throw new Error('Invalid quota state');
 quota = reconcileQuota(quota, previous);
-const allocation = Math.max(0, Math.min(config.perRun, config.dailyNewContactLimit - quota.reserved));
+const allocation = budget ? 0 : Math.max(0, Math.min(config.perRun, config.dailyNewContactLimit - quota.reserved));
 cycle.newContactAllocation = allocation;
 quota.reserved += allocation;
 // Reserve before dispatch; never automatically release uncertain attempts.

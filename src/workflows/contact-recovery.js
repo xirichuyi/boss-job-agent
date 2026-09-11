@@ -73,6 +73,7 @@ export async function recoverContacts({root,ledger,report,chat,save,assertAuthor
       entry.contactRecovery={state:'completed',at:new Date().toISOString()};delete entry.pendingWrite;
       report.receipts.push(receipt);report.result.messagesSent++;report.contactRecovery.completed++;save();resolveContactAlerts(root,entry.job.id);
     } catch(error) {
+      if(['TASK_PAUSED','LEASE_LOST'].includes(error.code))throw error;
       if(classifyFailure(error.message)==='authentication')throw error;
       deferContact(root,entry,error,save);report.contactRecovery.deferred++;
       if(entry.contactRecovery.state==='manual_required')report.contactRecovery.manual++;

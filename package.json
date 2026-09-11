@@ -5,6 +5,10 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "health": "node scripts/browser-health.mjs",
+    "status": "node scripts/agent-status.mjs",
+    "setup": "node scripts/setup.mjs",
     "start": "python3 scripts/scheduler.py",
     "init": "node scripts/init.mjs",
     "test": "node --test"

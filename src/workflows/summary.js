@@ -11,5 +11,5 @@ export function summarizeCycle(report) {
     detailReads: (report.jobReviews || []).filter(j => j.text).length, reasons,
     outcome: report.status === 'blocked' ? 'blocked' : sent ? 'messages_confirmed' : 'completed_no_send',
     explanation: sent ? `已确认发送${sent}条消息` : report.status === 'blocked' ? `未确认新消息，执行异常：${report.reason}` : '本轮执行完成但未发送：岗位被筛选/防重跳过，或没有可自动回复的新消息。',
-    inbox: report.inboxSummary || {}, inboxDiscovery: report.inboxDiscovery || {}, reconciliation: report.reconciliation || {}, contactRecovery: report.contactRecovery || {}, contactFailures: report.contactFailures || [] };
+    inbox: report.inboxSummary || {}, inboxDiscovery: report.inboxDiscovery || {}, reconciliation: report.reconciliation || {}, contactRecovery: report.contactRecovery || {}, contactFailures: report.contactFailures || [], modelDeferredUntil:report.modelDeferredUntil || null };
 }

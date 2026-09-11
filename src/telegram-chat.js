@@ -1,4 +1,5 @@
 import { AGENT } from './agent-config.js';
+import { searchCities } from './job-filters.js';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -36,7 +37,7 @@ export function snapshot(root) {
 }
 export function statusText(s) {
   const c = { ...s.cycle, reason: s.cycle.reason || s.cycle.summary?.explanation }, r = c.result;
-  return `求职 Agent 状态：${s.status.state || '未知'}\n阶段：${s.status.phase || '—'}\n当前岗位：${s.status.company || '—'} / ${s.status.job || '—'}\n本轮：${c.status || '未知'}${r ? `；已确认新联系 ${r.newContacts} 人，消息 ${r.messagesSent} 条，附件 ${r.attachmentsSent} 份` : '；尚无完成结果'}\n原因：${c.reason || '—'}\n下一次检查/运行：${s.status.nextAt || '执行中或待调度'}\n数据时间（UTC）：${s.capturedAt}\n上限：每天${AGENT.schedule.dailyNewContactLimit}位新HR；${AGENT.search.city}、${AGENT.search.minimumCompanySize}人以上；不保证凑满。`;
+  return `求职 Agent 状态：${s.status.state || '未知'}\n阶段：${s.status.phase || '—'}\n当前岗位：${s.status.company || '—'} / ${s.status.job || '—'}\n本轮：${c.status || '未知'}${r ? `；已确认新联系 ${r.newContacts} 人，消息 ${r.messagesSent} 条，附件 ${r.attachmentsSent} 份` : '；尚无完成结果'}\n原因：${c.reason || '—'}\n下一次检查/运行：${s.status.nextAt || '执行中或待调度'}\n数据时间（UTC）：${s.capturedAt}\n上限：每天${AGENT.schedule.dailyNewContactLimit}位新HR；${searchCities().map(c=>c.name).join("、")}、${AGENT.search.minimumCompanySize}人以上；不保证凑满。`;
 }
 export function answerQuestion(root, question, history, runner = spawnSync) {
   const context = snapshot(root);

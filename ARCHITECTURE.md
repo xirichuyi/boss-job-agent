@@ -1,6 +1,6 @@
 # 运行链路与失败边界
 
-配置源：model.json → 模型/推理；agent.json → 业务参数；私密资料 → profile。进程级配置快照避免调用中途改变模型导致回执或冷却记录错配。SQLite 只持久化运行授权、执行进度、额度、请求和账本，不再复制模型/频率参数。
+配置入口：config-files.js 统一解析 BOSS_CONFIG_DIR，effective-config.js 汇总实际生效值与旧字段提示。model.json → 模型/推理；agent.json → 业务参数；job-filters.json → 城市/薪资/类型；execution.json → 并行/恢复；私密资料 → profile。进程级配置快照避免调用中途改变模型导致回执或冷却记录错配。SQLite 只持久化运行授权、执行进度、额度、请求和账本，不再复制模型/频率参数。
 
 | 阶段 | 入口 | 失败处理 |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ SQLite采用WAL、synchronous FULL、事务提交额度+周期、意图+账本�
 
 ## 单周期内的并行
 
-`run-cycle.mjs` 在同一 Harness 租约内同时启动 search / inbox 两个异步分支，共享唯一账本、联系人额度与结果计数；不是两个独立进程各自投递。默认由 `config/execution.json` 开启。
+`run-cycle.mjs` 管理租约、持久化与收尾，`workflows/cycle-runner.js` 在同一 Harness 租约内编排 search / inbox 两个异步分支，共享唯一账本、联系人额度与结果计数；不是两个独立进程各自投递。默认由 `config/execution.json` 开启。
 
 - 搜索使用岗位标签页，收件箱使用聊天标签页；聊天方法统一经过 `task-coordinator.js` 的优先级互斥锁。
 - 收件箱释放聊天锁后才生成回复。模型等待由 `async-decision.js` 的后台线程承担，主事件循环仍能处理 CDP；模型调用单队列，避免冷却状态并发覆盖。
@@ -29,5 +29,9 @@ SQLite采用WAL、synchronous FULL、事务提交额度+周期、意图+账本�
 - 优先级只影响排队任务，不打断已经开始的发送。并行不会增加每日联系限额，也不绕过登录验证或结果未知隔离。
 
 JSON是兼容导出。备份请用SQLite backup接口；不要只复制主数据库而遗漏未checkpoint的WAL。回退旧账本可能重复联系，恢复前必须核对回退期间的发送记录。
+
+模型冷却由 available-decision.js 转为可重试的延后生成结果，不让派发器提前退出；无模型的读取、对账和已存正文恢复继续。pause/maintenance 只撤销新发送授权，不强杀等待回执的进程；收尾将尚未执行的 prepared 意图取消，已经执行的 unknown 意图保留待核实。Python 仍独立承担进程组硬超时，JavaScript 承担业务，不为统一语言重写监督机制。
+
+部署边界与开源版复现步骤见 [部署验收](docs/DEPLOYMENT-ACCEPTANCE.md)。当前 ROOT 同时是工作数据根和部分子进程代码根，不能当成独立数据目录随意替换。旧线上目录与公开仓库的自动迁移、统一版本发布和回滚仍未实现。
 
 无法由单元测试证明：平台未来DOM稳定、跨所有账号的附件选择正确、所有未读覆盖、网络断开后的真实送达状态。详见README已知不足，部署者需在明确授权后逐项做有限真实验证。

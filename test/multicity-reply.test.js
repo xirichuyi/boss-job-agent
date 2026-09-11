@@ -37,7 +37,7 @@ test('resume receipt does not swallow another question; reply uses refreshed his
   assert.equal(sentResume,1);assert.equal(sentText,1);assert.equal(report.result.repliesSent,1);
 });
 test('reply and search are registered as independent coordinated lanes',()=>{
-  const s=fs.readFileSync(new URL('../scripts/run-cycle.mjs',import.meta.url),'utf8');
+  const s=fs.readFileSync(new URL('../src/workflows/cycle-runner.js',import.meta.url),'utf8');
   assert.ok(s.includes('await runParallelLanes('));
   assert.ok(s.includes("inbox:lane('inbox'"));
   assert.ok(s.includes("search:lane('search'"));

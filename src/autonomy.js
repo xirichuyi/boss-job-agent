@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 export function decisionKey(cycleId, mode) { return `${cycleId}.${mode}.${randomUUID()}`; }
 
 export function classifyFailure(reason = '') {
+  if (/任务已暂停或维护|执行租约失效/.test(reason)) return 'transient';
   if (/登录|验证|访问受限|异常访问|业务错误\s*(?:37|121)/.test(reason)) return 'authentication';
   if (/用量限额冷却|超时|timeout|fetch failed|ECONN|连接|页面内容未就绪|worker_timeout|worker_failed|页面尚未|内容尚未|历史变化|JD变化/i.test(reason)) return 'transient';
   return 'review';

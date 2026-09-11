@@ -76,6 +76,7 @@ export async function contactJobs({root, list, cycle, ledger, report, jobs, chat
     supplement.status = 'delivered'; entry.status = 'delivered'; entry.deliveryStage='complete'; entry.receipt = receipt; delete entry.pendingWrite;
     report.receipts.push(receipt); report.result.messagesSent++; save();
     }); } catch(error) {
+      if(['TASK_PAUSED','LEASE_LOST'].includes(error.code))throw error;
       if(classifyFailure(error.message)==='authentication')throw error;
       const failed=ledger.contacts.find(e=>e.cycle===cycle.id&&e.job.id===job.id);
       if(!failed) { job.rejected='联系前读取失败，留待下轮：'+error.message;save();continue; }

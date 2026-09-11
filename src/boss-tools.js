@@ -1,4 +1,5 @@
 import { AGENT } from './agent-config.js';
+import { searchCities } from './job-filters.js';
 import { parseCompanySize } from './ranker.js';
 
 // Reuse the visible browser's session. Credentials never leave Chromium.
@@ -90,7 +91,8 @@ export class BossTools {
   async searchJobs({ query, page = 1 } = {}) {
     if (!query || typeof query !== 'string' || query.length > 80) throw new Error('请输入岗位关键词');
     if (!Number.isInteger(page) || page < 1 || page > 30) throw new Error('页码无效');
-    const data = await this.read('/wapi/zpgeek/search/joblist.json', { scene: '1', query, city: AGENT.search.cityCode, page: String(page), pageSize: '15' });
+    const city=searchCities()[0];
+    const data = await this.read('/wapi/zpgeek/search/joblist.json', { scene: '1', query, city: city.code, page: String(page), pageSize: '15' });
     if (!Array.isArray(data.jobList)) throw new Error('职位接口结构变化');
     const jobs = data.jobList.map(j => ({
       id: j.encryptJobId, title: j.jobName, company: j.brandName,
@@ -102,7 +104,7 @@ export class BossTools {
     const accepted = [], rejected = [];
     for (const job of jobs) {
       const size = parseCompanySize(job.companySize);
-      const reason = !job.location.startsWith(AGENT.search.city) ? '城市不匹配'
+      const reason = !job.location.startsWith(city.name) ? '城市不匹配'
         : !size || size.minimum < AGENT.search.minimumCompanySize ? '企业不足500人或规模未知'
         : job.contacted ? '已经联系' : !job.valid ? '岗位无效' : null;
       (reason ? rejected : accepted).push(reason ? { ...job, reason } : job);

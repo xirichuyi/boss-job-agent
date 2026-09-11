@@ -1,0 +1,7 @@
+{
+  "cities": ["杭州", "深圳"],
+  "minimumMonthlySalaryK": 11,
+  "minimumCompanySize": 500,
+  "keywords": ["Go开发", "AI应用开发", "产品经理"],
+  "resumeFile": "resume.pdf"
+}
