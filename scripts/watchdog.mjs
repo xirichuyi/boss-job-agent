@@ -1,4 +1,6 @@
 import { ROOT } from '../src/project-root.js';
+import { businessHealth } from '../src/business-health.js';
+import { executionConfig } from '../src/task-coordinator.js';
 import { readState, harness } from '../src/harness-store.js';
 import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -18,6 +20,7 @@ const attempts = (previous.attempts || []).filter(t => now - t < 15 * 60000);
 const plan = watchdogPlan({ enabled: config.enabled, maintenance, service: service.state,
   ageSeconds: (now - latest) / 1000, bootGrace: now - (attempts.at(-1) || 0) < 90000, attempts: attempts.length }, now);
 const state = { checkedAt: new Date().toISOString(), service, plan, attempts, lastNotification: previous.lastNotification };
+state.business=businessHealth(previous.business,read('scheduled-cycle.json',null),executionConfig().businessHealth);
 if (['start_stopped', 'restart_stale'].includes(plan)) {
   attempts.push(now); atomicJson(root + 'watchdog-state.json', state);
   const r = spawnSync('/usr/bin/systemctl', [plan === 'start_stopped' ? 'start' : 'restart', 'job-agent-scheduler.service'], { timeout: 25000, encoding: 'utf8' });

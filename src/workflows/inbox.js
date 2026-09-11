@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { deferInbox, stopAll } from './inbox-retry.js';
 import { AGENT } from '../agent-config.js';
 import { pendingWrite } from './reconcile.js';
 import { rejectJobFilters, loadJobFilters } from '../job-filters.js';
@@ -44,6 +45,11 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
     if (Date.now() >= deadline) { report.inboxDeferred = true; break; }
     processed++;
     checkedEntries.add(entry);
+    if(Date.parse(entry.inboxRetry?.nextAt||'')>Date.now()) {
+      report.inboxSummary.retryDeferred=(report.inboxSummary.retryDeferred||0)+1;
+      continue;
+    }
+    try {
     const excluded = rejectJobFilters(entry.job);
     if (excluded) { entry.pendingUser = excluded; report.inboxSummary.excluded = (report.inboxSummary.excluded || 0) + 1; save(); continue; }
     progress('check_existing_history', { company: entry.job.company });
@@ -51,7 +57,8 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
       report.historyChecks.push({ jobId: entry.job.id, status: 'failed', reason: error.message });
       entry.historyFailures = (entry.historyFailures || 0) + 1; save();
       raiseAlert(root, { kind: 'history_read_failed', contact: entry.job.id, reason: '某已联系HR历史暂时读取失败，轮询会继续重试。' });
-      if (classifyFailure(error.message) === 'authentication') throw error;
+      if (stopAll(error)) throw error;
+      deferInbox(root,entry,error);save();
       return null;
     });
     if (!history) { report.inboxSummary.readFailed++; continue; }
@@ -76,7 +83,7 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
       state = conversationState(history);
     }
     const human = state.human;
-    if (!human.length || human.at(-1).self) { report.inboxSummary.noNewMessage++; continue; }
+    if (!human.length || human.at(-1).self) { delete entry.inboxRetry;save();report.inboxSummary.noNewMessage++; continue; }
     const hash = createHash('sha256').update(JSON.stringify(history.messages) + fs.readFileSync(root + '/candidate-profile.md', 'utf8') + fs.readFileSync(new URL('../../prompts/reply.md', import.meta.url), 'utf8') + fs.readFileSync(new URL('../../prompts/common.md', import.meta.url), 'utf8')).digest('hex');
     // A resume receipt does not answer other questions from HR.
     if (entry.lastHandledHistory === hash) { report.inboxSummary.alreadyHandled++; continue; }
@@ -93,6 +100,17 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
     const receipt = await chat.sendText(entry.job, decision.message, history, () => { assertAuthority(); intent.status = 'outcome_unknown'; entry.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('text', history, {message:decision.message}); save(); });
     intent.status = 'delivered'; entry.status = 'delivered'; entry.lastHandledHistory = hash; delete entry.pendingWrite;
     report.receipts.push(receipt); report.result.messagesSent++; report.result.repliesSent++; save();
+    delete entry.inboxRetry;save();
+    } catch(error) {
+      if(stopAll(error))throw error;
+      // Isolate this contact, including ambiguous sends, without aborting another lane.
+      deferInbox(root,entry,error);
+      report.inboxSummary.processingFailed=(report.inboxSummary.processingFailed||0)+1;
+      report.inboxFailures ||= [];
+      report.inboxFailures.push({jobId:entry.job.id,reason:error.message,status:entry.status});
+      for(const intent of report.intents)if(intent.jobId===entry.job.id&&intent.status==='prepared')intent.status='cancelled';
+      save();
+    }
   }
   let roundRobinProcessed=0;
   for(const entry of originalEntries) { if(!checkedEntries.has(entry))break; roundRobinProcessed++; }

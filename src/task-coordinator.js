@@ -7,6 +7,11 @@ export function executionConfig() {
   if(typeof config.parallelWorkflows!=='boolean')throw Error('并行调度配置无效');
   const r=config.contactRecovery;
   if(!r || !['perRun','minutes','maxAttempts','retryMinutes'].every(k=>Number.isInteger(r[k])&&r[k]>0) || r.minutes>3 || r.perRun>10 || r.maxAttempts>10)throw Error('联系人恢复配置无效');
+  config.inboxRetry={baseMinutes:30,maxMinutes:240,escalateAfter:3,...config.inboxRetry};
+  const i=config.inboxRetry;
+  if(!Object.values(i).every(v=>Number.isInteger(v)&&v>0)||i.maxMinutes<i.baseMinutes||i.maxMinutes>1440)throw Error('收件箱退避配置无效');
+  config.businessHealth={failureCycles:3,minReadFailures:3,...config.businessHealth};
+  if(!Object.values(config.businessHealth).every(v=>Number.isInteger(v)&&v>0))throw Error('业务健康配置无效');
   return config;
 }
 

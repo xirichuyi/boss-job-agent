@@ -13,6 +13,12 @@ function setup(t, alerts) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   return root;
 }
+test('an alert waiting for retry does not block a later authentication alert',async t=>{
+  const root=setup(t,[{id:'wait',kind:'authentication',status:'open',telegram:{retryAt:new Date(Date.now()+60000).toISOString()}},{id:'due',kind:'authentication',status:'open'}]);
+  let body;
+  await flushTelegram(root,async(_,options)=>{body=JSON.parse(options.body);return{json:async()=>({ok:true,result:{message_id:5}})}});
+  assert.match(body.text,/due/);
+});
 test('ordinary alerts and missing welcome marker send nothing', async t => {
   const root = setup(t, ['hr_pending', 'history_read_failed', 'review', 'outcome_unknown'].map(kind => ({ kind, status: 'open' })));
   const result = await flushTelegram(root, () => assert.fail('unsolicited routine notification'));
