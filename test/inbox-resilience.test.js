@@ -25,7 +25,7 @@ test('read failure backs off without starving another contact',async t=>{
   const c=fixture(t),reads=[];
   c.chat={openConversation:async job=>{reads.push(job.id);if(job.id==='a')throw Error('页面内容未就绪');return{messages:[{self:true,text:'已回复'}]};}};
   await checkInbox(c);assert.ok(Date.parse(c.ledger.contacts[0].inboxRetry.nextAt)>Date.now());
-  await checkInbox(c);assert.deepEqual(reads,['a','b','b']);assert.equal(c.report.inboxSummary.retryDeferred,1);
+  await checkInbox(c);assert.deepEqual(reads,['a','a','b','b']);assert.equal(c.report.inboxSummary.retryDeferred,1);
 });
 test('authentication still stops all work',async t=>{
   const c=fixture(t);c.chat={openConversation:async()=>{throw Error('需要登录验证');}};

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readHistory } from './history-read.js';
 import { deferInbox, stopAll } from './inbox-retry.js';
 import { AGENT } from '../agent-config.js';
 import { pendingWrite } from './reconcile.js';
@@ -34,7 +35,8 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
   const batch = selectInboxBatch(ledger.contacts, inbox.next, AGENT.workflow.inboxContactsPerRun);
   // Prioritize all known unread contacts, including those outside the cursor slice.
   const visibleEntries=batch.entries.filter(e=>visibleRows.some(r=>r.recruiter===e.job.recruiter&&r.label.includes(e.job.company)));
-  const ordered=[...new Set([...unreadEntries,...visibleEntries,...batch.entries])];
+  const drafts=eligible.filter(e=>e.replyDraft).sort((a,b)=>(a.replyDraft.createdAt||'').localeCompare(b.replyDraft.createdAt||''));
+  const ordered=[...new Set([...unreadEntries,...drafts,...visibleEntries,...batch.entries])];
   const originalEntries=batch.entries;
   batch.entries=ordered;
   const checkedEntries=new Set();
@@ -53,7 +55,7 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
     const excluded = rejectJobFilters(entry.job);
     if (excluded) { entry.pendingUser = excluded; report.inboxSummary.excluded = (report.inboxSummary.excluded || 0) + 1; save(); continue; }
     progress('check_existing_history', { company: entry.job.company });
-    let history = await chat.openConversation(entry.job).catch(error => {
+    let history = await readHistory(chat,entry.job,{deadline,onRetry:()=>{report.inboxSummary.readRetried=(report.inboxSummary.readRetried||0)+1;}}).catch(error => {
       report.historyChecks.push({ jobId: entry.job.id, status: 'failed', reason: error.message });
       entry.historyFailures = (entry.historyFailures || 0) + 1; save();
       raiseAlert(root, { kind: 'history_read_failed', contact: entry.job.id, reason: '某已联系HR历史暂时读取失败，轮询会继续重试。' });
@@ -83,12 +85,18 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
       state = conversationState(history);
     }
     const human = state.human;
-    if (!human.length || human.at(-1).self) { delete entry.inboxRetry;save();report.inboxSummary.noNewMessage++; continue; }
+    if (!human.length || human.at(-1).self) { delete entry.inboxRetry;delete entry.replyDraft;delete entry.replyDeferredAt;save();report.inboxSummary.noNewMessage++; continue; }
     const hash = createHash('sha256').update(JSON.stringify(history.messages) + fs.readFileSync(root + '/candidate-profile.md', 'utf8') + fs.readFileSync(new URL('../../prompts/reply.md', import.meta.url), 'utf8') + fs.readFileSync(new URL('../../prompts/common.md', import.meta.url), 'utf8')).digest('hex');
     // A resume receipt does not answer other questions from HR.
     if (entry.lastHandledHistory === hash) { report.inboxSummary.alreadyHandled++; continue; }
-    const decision = await decide(entry.job, history, 'reply');
-    if (Date.now() >= deadline) { report.inboxDeferred = true; break; }
+    // Reuse only against the same fresh platform history/profile/prompt fingerprint.
+    const cached=entry.replyDraft?.historyHash===hash?entry.replyDraft:null;
+    if(entry.replyDraft&&!cached){delete entry.replyDraft;save();}
+    const decision = cached?.decision || await decide(entry.job, history, 'reply');
+    entry.lastReplyDecision={action:decision.action,reason:decision.reason||null,retryable:!!decision.retryable,at:new Date().toISOString()};
+    if(decision.action==='reply')entry.replyDraft={historyHash:hash,decision,createdAt:cached?.createdAt||new Date().toISOString()};
+    save();
+    if (Date.now() >= deadline) { report.inboxDeferred = true; entry.replyDeferredAt=new Date().toISOString();save();break; }
     if (decision.action === 'skip') {
       report.inboxSummary.pending++;
       entry.pendingUser = decision.reason; if (!decision.retryable) entry.lastHandledHistory = hash; save();
@@ -99,6 +107,7 @@ export async function checkInbox({root, ledger, report, chat, decide, progress, 
     report.intents.push(intent); save();
     const receipt = await chat.sendText(entry.job, decision.message, history, () => { assertAuthority(); intent.status = 'outcome_unknown'; entry.status = 'outcome_unknown'; entry.pendingWrite = pendingWrite('text', history, {message:decision.message}); save(); });
     intent.status = 'delivered'; entry.status = 'delivered'; entry.lastHandledHistory = hash; delete entry.pendingWrite;
+    delete entry.replyDraft;delete entry.replyDeferredAt;delete entry.pendingUser;
     report.receipts.push(receipt); report.result.messagesSent++; report.result.repliesSent++; save();
     delete entry.inboxRetry;save();
     } catch(error) {
