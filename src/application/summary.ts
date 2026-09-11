@@ -32,7 +32,9 @@ export function summarizeCycle(report) {
       ? `已确认发送${sent}条消息`
       : report.status === "blocked"
         ? `未确认新消息，执行异常：${report.reason}`
-        : "本轮执行完成但未发送：岗位被筛选/防重跳过，或没有可自动回复的新消息。",
+        : reasons["详情读取失败"]
+          ? `本轮结束但未发送：${reasons["详情读取失败"]}次岗位详情读取失败；其他岗位可能被筛选或防重跳过，需检查读取链路。`
+          : "本轮执行完成但未发送：岗位被筛选/防重跳过，或没有可自动回复的新消息。",
     inbox: report.inboxSummary || {},
     inboxFailures: report.inboxFailures || [],
     inboxDiscovery: report.inboxDiscovery || {},

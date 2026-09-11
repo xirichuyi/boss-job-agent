@@ -1,4 +1,5 @@
 import { AGENT } from "../../config/agent.ts";
+import { detailViewExpression } from "./detail-view.ts";
 import {
   jobIdsExpression,
   advanceJobsExpression,
@@ -378,20 +379,22 @@ export class VisibleTools extends BossTools {
     const proof = this.detailProofs?.get(id);
     if (!proof?.company || !proof.recruiter || !proof.description)
       throw new Error("岗位详情ID证据未就绪");
-    const title = proof.title;
-    return this.until(`(()=>{
-      const d=document.querySelector('.job-detail-box');
-      if(!d||!d.innerText.startsWith(${JSON.stringify(title)})||!d.innerText.includes('职位描述'))return null;
-      const active=document.querySelector('.job-card-wrap.active .job-name');
-      if(active?.getAttribute('href')!=='/job_detail/${id}.html')return null;
-      const boss=d.querySelector('.job-boss-info');if(!boss)return null;
-      if(boss.querySelector('.name')?.childNodes[0]?.textContent.trim()!==${JSON.stringify(proof.recruiter)}||!boss.querySelector('.boss-info-attr')?.textContent.includes(${JSON.stringify(proof.company)}))return null;
-      return {id:${JSON.stringify(id)},title:${JSON.stringify(title)},text:d.innerText,
-        proof:${JSON.stringify(proof)},
-        recruiter:boss.querySelector('.name')?.childNodes[0]?.textContent.trim(),
-        identity:boss.querySelector('.boss-info-attr')?.textContent.trim(),
-        buttons:[...d.querySelectorAll('a,button')].filter(e=>/立即沟通|继续沟通/.test(e.textContent)).map(e=>({text:e.textContent.trim(),class:e.className}))};
-    })()`);
+    try {
+      return await this.until(detailViewExpression(proof));
+    } catch (error) {
+      if (error.message !== "页面内容未就绪；未刷新或重复导航") throw error;
+      const checks = await this.evaluate(
+        detailViewExpression(proof, true),
+      ).catch(() => null);
+      const failed = checks
+        ? Object.keys(checks)
+            .filter((k) => !checks[k])
+            .join(",")
+        : "unavailable";
+      throw Error(
+        "页面内容未就绪：DETAIL_VIEW_MISMATCH:" + failed + "；未刷新或重复导航",
+      );
+    }
   }
   async snapshot() {
     await this.guard();
