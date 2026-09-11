@@ -18,6 +18,8 @@ test("fresh public tree runs TS supervisor → dispatcher safely, with one priva
     });
   }
   const configDir = path.join(root, "private-config");
+  const dataDir = path.join(root, "separate-data");
+  fs.mkdirSync(dataDir);
   writeSetup(
     configDir,
     planSetup({ cities: ["南京"], resumeFile: "验收简历.pdf" }),
@@ -25,6 +27,7 @@ test("fresh public tree runs TS supervisor → dispatcher safely, with one priva
   const env = {
     ...process.env,
     BOSS_AGENT_ROOT: root,
+    BOSS_DATA_DIR: dataDir,
     BOSS_CONFIG_DIR: configDir,
     NODE_BINARY: process.execPath,
   };
@@ -52,6 +55,8 @@ test("fresh public tree runs TS supervisor → dispatcher safely, with one priva
     JSON.parse(run(process.execPath, ["scripts/agent-status.ts"]));
   assert.equal(status().configuration.search.cities[0].name, "南京");
   assert.equal(status().configuration.resumeFile, "验收简历.pdf");
+  assert.equal(status().configuration.paths.data, dataDir);
+  assert.equal(status().configuration.paths.code, root + "/");
   assert.equal(status().schedule.automationReady, false);
   run(process.execPath, ["scripts/agent-control.ts", "resume", "--state-only"]);
   assert.equal(status().schedule.enabled, true);
@@ -61,5 +66,13 @@ test("fresh public tree runs TS supervisor → dispatcher safely, with one priva
     fs.readFileSync(path.join(root, "scripts/agent-control.ts"), "utf8"),
     /['"]stop['"]/,
   );
-  assert.equal(fs.readdirSync(path.join(root, "memory/cycles")).length, 0);
+  assert.equal(fs.readdirSync(path.join(dataDir, "memory/cycles")).length, 0);
+  assert.equal(fs.existsSync(path.join(root, "memory")), false);
+  const reinit = spawnSync(process.execPath, ["scripts/init.ts"], {
+    cwd: root,
+    env,
+    encoding: "utf8",
+  });
+  assert.notEqual(reinit.status, 0);
+  assert.match(reinit.stderr, /不会覆盖账本/);
 });

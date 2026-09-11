@@ -16,6 +16,10 @@ agent.json 管理规模、关键词、频率、额度、附件名和程序路径
 
 浏览器基础超时、Telegram 轮询/重试/文本预算也在 execution.json 中配置，字段与升级说明见 [运行参数配置](docs/RUNTIME-CONFIG.md)。
 
+支持代码与数据分离：`BOSS_DATA_DIR` 指向独立数据目录（放 candidate-profile.md 和 memory），`BOSS_CONFIG_DIR` 指向私密配置目录。环境变量必须同时设置到 CLI 和 systemd 服务；未设置则兼容原地安装。已有用户不要直接切到空目录再初始化，否则会失去原账本的防重记录。搬迁前应暂停、备份并完整迁移原有状态。
+
+本地隔离安装验收：`npm run test:install -- /opt/work_projects`。重新安装依赖并跑测试和关闭发送的启动流程，输出验收报告路径；不会改动正在运行的实例，不会联系 HR。其他电脑可省略目录参数，使用系统临时目录。
+
 配置向导只生成配置，不会安装软件、填写简历、初始化账本、登录或授权发送。读取我提供的真实经历到私密 candidate-profile.md，文件0600、目录0700；不要猜测履历、薪资、到岗日期。令牌只写私密文件，不输出、不提交。
 
 运行 npm run doctor -- --offline 检查本机，再配置非root Chromium、独立用户目录及本地监听端口。通过SSH隧道或有身份认证的网关让我扫码，不关闭sandbox、不直接暴露CDP/VNC/noVNC。只对全新目录执行 npm run init。打开岗位页和聊天页，再运行 npm run doctor、npm run health、npm run status；区分检查成功与尚未验证的模型权限/附件/真实发送。

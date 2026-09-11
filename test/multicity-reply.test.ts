@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { searchCities, searchSlot } from "../src/config/job-filters.ts";
-import { hardReject } from "../src/domain/policy.ts";
+import { hardReject } from "../src/application/job-policy.ts";
 import { checkInbox } from "../src/application/inbox.ts";
 
 test("all city-keyword-salary combinations rotate without dropping a city", () => {

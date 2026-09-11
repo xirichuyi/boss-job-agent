@@ -1,5 +1,7 @@
 # 运行链路与失败边界
 
+架构选择、依赖边界和迁移债务以 [ADR 001](docs/ARCHITECTURE-DECISION.md) 为准。当前为增量迁移中的 TS 模块化单体，不是已全面解耦的最终状态。
+
 ## TypeScript 分层
 
 ```text
@@ -26,7 +28,7 @@ src/runtime/            TS 调度、子进程监督、互斥、健康检查
 
 监督参数在 execution.json.supervisor，旧配置缺少此节时兼容既有默认值；默认15分钟硬超时，TERM后10秒KILL整个子进程组，systemd TimeoutStopSec 应大于清理宽限。仅回退代码不等于可以回退账本，禁止丢弃升级期间已发送记录。
 
-配置入口：config-files.ts 统一解析 BOSS_CONFIG_DIR，effective-config.ts 汇总实际生效值与旧字段提示。model.json → 模型/推理；agent.json → 业务参数；job-filters.json → 城市/薪资/类型；execution.json → 并行/恢复；私密资料 → profile。进程级配置快照避免调用中途改变模型导致回执或冷却记录错配。SQLite 只持久化运行授权、执行进度、额度、请求和账本，不再复制模型/频率参数。
+配置入口：config/files.ts 统一解析 BOSS_CONFIG_DIR，config/effective.ts 汇总实际生效值与旧字段提示。model.json → 模型/推理；agent.json → 业务参数；job-filters.json → 城市/薪资/类型；execution.json → 并行/恢复；私密资料 → profile。进程级配置快照避免调用中途改变模型导致回执或冷却记录错配。SQLite 只持久化运行授权、执行进度、额度、请求和账本，不再复制模型/频率参数。
 
 | 阶段 | 入口 | 失败处理 |
 | --- | --- | --- |
@@ -58,6 +60,8 @@ JSON是兼容导出。备份请用SQLite backup接口；不要只复制主数据
 
 模型冷却由 available-decision.ts 转为可重试的延后生成结果，不让派发器提前退出；无模型的读取、对账和已存正文恢复继续。pause/maintenance 只撤销新发送授权，不强杀等待回执的进程；收尾将尚未执行的 prepared 意图取消，已经执行的 unknown 意图保留待核实。TypeScript runtime/process-supervisor.ts 承担进程组硬超时与退出清理；Linux flock 仍提供操作系统级互斥。
 
-部署边界与开源版复现步骤见 [部署验收](docs/DEPLOYMENT-ACCEPTANCE.md)。当前 ROOT 同时是工作数据根和部分子进程代码根，不能当成独立数据目录随意替换。旧线上目录与公开仓库的自动迁移、统一版本发布和回滚仍未实现。
+部署边界与开源版复现步骤见 [部署验收](docs/DEPLOYMENT-ACCEPTANCE.md)。CODE_ROOT 从模块路径确定；BOSS_DATA_DIR 指定个人资料和 memory 数据根，兼容旧 BOSS_AGENT_ROOT 别名。调度子进程和模型 schema 固定从代码根加载，配置目录由 BOSS_CONFIG_DIR 指定。未设置环境变量时保留原地安装行为。现有数据不会自动搬迁；统一版本发布和回滚仍未实现。
+
+`npm run test:install -- /opt/work_projects` 在新隔离目录执行 npm ci、全量检查、私密配置生成、默认关闭初始化、单次关闭发送调度和重复初始化拒绝验收，保留 acceptance.json。不会启用浏览器、模型或真实发送。该验收不替代线上浏览器故障演练。
 
 无法由单元测试证明：平台未来DOM稳定、跨所有账号的附件选择正确、所有未读覆盖、网络断开后的真实送达状态。详见README已知不足，部署者需在明确授权后逐项做有限真实验证。

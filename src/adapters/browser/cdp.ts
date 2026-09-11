@@ -84,7 +84,14 @@ export class BossTools {
         reject(new Error(`${method} 超时`));
       }, this.settings.commandTimeoutMs);
       this.pending.set(id, { resolve, reject, timer });
-      this.ws.send(JSON.stringify({ id, method, params }));
+      try {
+        this.ws.send(JSON.stringify({ id, method, params }));
+      } catch (error) {
+        // Socket state can change after the readyState check; don't leave an orphan timer.
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(error);
+      }
     });
   }
   disconnect() {

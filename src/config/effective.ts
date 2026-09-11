@@ -7,6 +7,7 @@ import {
 import { MODEL, REASONING_EFFORT } from "./model.ts";
 import { executionConfig } from "../runtime/coordinator.ts";
 import { configFile } from "./files.ts";
+import { ROOT, CODE_ROOT } from "../project-root.ts";
 
 export function effectiveConfig() {
   const filters = loadJobFilters();
@@ -14,6 +15,7 @@ export function effectiveConfig() {
   const { city, cityCode, ...search } = AGENT.search;
   const { conversationPages, ...workflow } = AGENT.workflow;
   return {
+    paths: { code: CODE_ROOT, data: ROOT },
     sources: Object.fromEntries(
       ["agent", "job-filters", "model", "execution"].map((n) => [
         n,

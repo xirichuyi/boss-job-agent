@@ -70,7 +70,7 @@ test("nondefault config controls prompts, policy, resume and model executable", 
   fs.writeFileSync(filtersFile, JSON.stringify(filters));
   const program = `
     import { AGENT } from './src/config/agent.ts';
-    import { hardReject } from './src/domain/policy.ts';
+    import { hardReject } from './src/application/job-policy.ts';
     import { buildPrompt } from './src/adapters/model/prompts.ts';
     import { RESUME_FILE } from './src/application/conversation-policy.ts';
     import { callCodex, MODEL } from './src/adapters/model/codex.ts';

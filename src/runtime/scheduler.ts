@@ -49,8 +49,9 @@ export async function schedulerTick(
   config: SupervisorConfig,
   force = false,
   signal?: AbortSignal,
+  codeRoot = root,
 ): Promise<number | "already_running"> {
-  const env = { ...process.env };
+  const env: NodeJS.ProcessEnv = { ...process.env, BOSS_DATA_DIR: root };
   delete env.JOB_AGENT_FORCE;
   if (force) env.JOB_AGENT_FORCE = "1";
   const options = {
@@ -67,7 +68,7 @@ export async function schedulerTick(
       "73",
       path.join(root, "memory/scheduler.lock"),
       process.execPath,
-      path.join(root, "scripts/scheduled-agent.ts"),
+      path.join(codeRoot, "scripts/scheduled-agent.ts"),
     ],
     { ...options, timeoutMs: config.workerTimeoutMs },
   );
@@ -76,14 +77,14 @@ export async function schedulerTick(
   if (code === 124) {
     const committed = await runProcessGroup(
       process.execPath,
-      [path.join(root, "scripts/harness-state.ts"), "timeout"],
+      [path.join(codeRoot, "scripts/harness-state.ts"), "timeout"],
       { ...options, timeoutMs: config.stateTimeoutMs },
     );
     if (committed !== 0) throw Error("超时状态提交失败");
   }
   await runProcessGroup(
     process.execPath,
-    [path.join(root, "scripts/telegram-notify.ts")],
+    [path.join(codeRoot, "scripts/telegram-notify.ts")],
     { ...options, timeoutMs: config.notificationTimeoutMs },
   );
   return code;
@@ -93,13 +94,14 @@ export async function runScheduler(
   config: SupervisorConfig,
   once = false,
   signal?: AbortSignal,
+  codeRoot = root,
 ): Promise<number> {
   process.umask(0o077);
   while (!signal?.aborted) {
     const started = Date.now();
     let result: number | "already_running" = 1;
     try {
-      result = await schedulerTick(root, config, once, signal);
+      result = await schedulerTick(root, config, once, signal, codeRoot);
     } catch (error) {
       console.error(
         "调度错误：" + (error instanceof Error ? error.message : String(error)),
@@ -108,9 +110,10 @@ export async function runScheduler(
         try {
           await runProcessGroup(
             process.execPath,
-            [path.join(root, "scripts/harness-state.ts"), "error"],
+            [path.join(codeRoot, "scripts/harness-state.ts"), "error"],
             {
               cwd: root,
+              env: { ...process.env, BOSS_DATA_DIR: root },
               timeoutMs: config.stateTimeoutMs,
               graceMs: config.terminationGraceMs,
               signal,

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hardReject, validateDecision } from "../src/domain/policy.ts";
+import { validateDecision } from "../src/domain/policy.ts";
+import { hardReject } from "../src/application/job-policy.ts";
 const base = {
   location: "杭州",
   salary: "11-20K",

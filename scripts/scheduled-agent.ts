@@ -1,5 +1,5 @@
 import { AGENT } from "../src/config/agent.ts";
-import { ROOT } from "../src/project-root.ts";
+import { ROOT, CODE_ROOT } from "../src/project-root.ts";
 import { readState, harness } from "../src/storage/harness.ts";
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -92,7 +92,7 @@ if (readState(outstanding)) {
     if (plan.action === "authentication") {
       const health = spawnSync(
         process.execPath,
-        [root + "/scripts/browser-health.ts"],
+        [CODE_ROOT + "/scripts/browser-health.ts"],
         { cwd: root, timeout: 20000, stdio: "ignore" },
       );
       if (health.status === 0)
@@ -203,10 +203,14 @@ status("running", {
   logPath,
 });
 // The TypeScript supervisor owns the process group and the hard deadline.
-const result = spawnSync(process.execPath, [root + "/scripts/run-cycle.ts"], {
-  cwd: root,
-  stdio: ["ignore", log, log],
-});
+const result = spawnSync(
+  process.execPath,
+  [CODE_ROOT + "/scripts/run-cycle.ts"],
+  {
+    cwd: root,
+    stdio: ["ignore", log, log],
+  },
+);
 fs.closeSync(log);
 let finished = readState(outstanding);
 if (

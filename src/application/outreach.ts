@@ -2,7 +2,7 @@ import { deferContact } from "./contact-recovery.ts";
 import { shanghaiDay } from "../storage/state.ts";
 import { AGENT } from "../config/agent.ts";
 import { pendingWrite } from "./reconcile.ts";
-import { hardReject } from "../domain/policy.ts";
+import { hardReject } from "./job-policy.ts";
 import { classifyFailure } from "../domain/recovery.ts";
 export async function contactJobs({
   root,

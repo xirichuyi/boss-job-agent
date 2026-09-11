@@ -1,10 +1,8 @@
-import { rejectJobFilters, searchCities } from "../config/job-filters.ts";
-import { AGENT } from "../config/agent.ts";
-export function hardReject(job) {
-  if (!searchCities().some((c) => job.location?.startsWith(c.name)))
+export function evaluateJobEligibility(job, cities, rejectFilters) {
+  if (!cities.some((c) => job.location?.startsWith(c.name)))
     return "工作地点不在配置城市中";
   if (!job.scaleEvidence) return "没有目标公司规模证据";
-  return rejectJobFilters(job);
+  return rejectFilters(job);
 }
 
 export function validateOutwardMessage(message) {

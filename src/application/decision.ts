@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { CODE_ROOT } from "../project-root.ts";
 import { readState } from "../storage/harness.ts";
 import { callCodex, MODEL } from "../adapters/model/codex.ts";
 import { validateDecision } from "../domain/policy.ts";
@@ -54,7 +55,7 @@ export function structuredCall(root, cycle, kind, data, runner) {
         "--ephemeral",
         "--json",
         "--output-schema",
-        root +
+        CODE_ROOT +
           "/scripts/" +
           (kind === "contact-batch" ? "batch-decision" : "decision") +
           ".schema.json",
