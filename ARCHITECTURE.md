@@ -1,6 +1,16 @@
 # 运行链路与失败边界
 
-架构选择、依赖边界和迁移债务以 [ADR 001](docs/ARCHITECTURE-DECISION.md) 为准。当前为增量迁移中的 TS 模块化单体，不是已全面解耦的最终状态。
+本文是架构的唯一维护入口。当前为增量迁移中的 TS 模块化单体，不是已全面解耦的最终状态。
+
+## 架构选择与约束
+
+采用端口/适配器设计，依据 [Cockburn 原文](https://alistair.cockburn.us/hexagonal-architecture)；单账号、共享浏览器和账本适合保持单体，参考 [Fowler 的 Monolith First](https://martinfowler.com/bliki/MonolithFirst.html)。这些是设计依据，不表示引入了外部框架。
+
+目标依赖：入口与装配层 → 用例和适配器；用例 → 业务规则与接口；适配器实现接口。domain 禁止读取配置、数据库或调用浏览器；application 编排搜索、联系、回复、对账；适配器处理协议；storage 管事务；config 管解析校验；runtime 管监督装配；scripts 只做 CLI 入口。
+
+AST 测试已经检查 domain 导入及 browser 反向依赖，但不是全仓库循环依赖扫描。尚待清理：application 直接访问配置/文件/存储、模型决策实现位置、config/effective 对 runtime 的依赖、scripts 残留业务、账本宽类型和 visible.ts 职责拆分。
+
+重构按业务链逐项迁移并补回归。用户偏好和运行预算归配置，协议常量和安全规则留代码；任何重构不得取消发送前落账、未知结果隔离、人工消息优先。离线测试和真实平台验收分别报告。
 
 ## TypeScript 分层
 
@@ -37,7 +47,7 @@ src/runtime/            TS 调度、子进程监督、互斥、健康检查
 | 派发 | scheduled-agent.ts | 先检查暂停、维护、限额、上轮恢复；SQLite租约防并发 |
 | 搜索 | application/search.ts | 配置关键词轮换，原生城市/规模筛选，核对响应证据 |
 | 首次联系 | application/outreach.ts | 先读JD与公司历史，最多3项一次生成，再逐条确认当前JD/历史/额度 |
-| 写入 | visible-tools.ts | 先持久化意图再点击；未知结果隔离，禁止盲重发 |
+| 写入 | adapters/browser/visible.ts | 先持久化意图再点击；未知结果隔离，禁止盲重发 |
 | 回复/附件 | application/inbox.ts | 扫描联系人列表与未读标记；已确认联系人轮询优先未读，陌生人进入待核实记录；附件按配置文件名及平台回执 |
 | 对账 | application/reconcile.ts | 只读核对发送前ID基线与唯一新送达消息；确认后恢复联系人，不重放、不追补历史发送计数 |
 | 结果 | application/summary.ts | 区分真正送达、正常零发送、模型异常和执行阻塞 |
@@ -50,7 +60,7 @@ SQLite采用WAL、synchronous FULL、事务提交额度+周期、意图+账本�
 
 `run-cycle.ts` 管理租约、持久化与收尾，`application/cycle-runner.ts` 在同一 Harness 租约内编排 search / inbox 两个异步分支，共享唯一账本、联系人额度与结果计数；不是两个独立进程各自投递。默认由 `config/execution.json` 开启。
 
-- 搜索使用岗位标签页，收件箱使用聊天标签页；聊天方法统一经过 `task-coordinator.ts` 的优先级互斥锁。
+- 搜索使用岗位标签页，收件箱使用聊天标签页；聊天方法统一经过 `runtime/coordinator.ts` 的优先级互斥锁。
 - 收件箱释放聊天锁后才生成回复。模型等待由 `async-decision.ts` 的后台线程承担，主事件循环仍能处理 CDP；模型调用单队列，避免冷却状态并发覆盖。
 - 首次联系的“平台历史复查 → 点击联系 → 核对默认招呼 → 补充消息送达”持有同一把可重入聊天锁，防止 HR 回复任务中途切换对象。
 - 发送前仍重新核对联系人与聊天历史。任一分支致命失败后禁止后续写入；等待所有分支安全结束再关闭 CDP 和提交终态，不能用会提前返回的 Promise.all 直接收尾。

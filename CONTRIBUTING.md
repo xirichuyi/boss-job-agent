@@ -1,6 +1,8 @@
 # 贡献说明
 
-先运行 `npm ci`、`npm test` 和 `python3 -m unittest discover -s test -p '*_test.py'`。测试不得使用真实账号发送消息；新增浏览器行为应使用 mock，并覆盖未知发送、不重复点击、人工消息变化和权限失效。
+先运行 `npm ci`、`npm run check`；安装相关修改再运行 `npm run test:install`。运行源码与测试均为 TypeScript，不需要 Python 测试。测试不得使用真实账号发送消息；新增浏览器行为应使用 mock，并覆盖未知发送、不重复点击、人工消息变化和权限失效。
+
+文档只保留明确职责：README 是安装入口（含可复制提示词），ARCHITECTURE 是架构唯一入口，docs/DEPLOYMENT-ACCEPTANCE.md 是现场验收，docs/RUNTIME-CONFIG.md 是运行参数参考；SECURITY 和本文分别维护安全与贡献约定。临时计划、模型工作总结、未采用方案调研不要不断新增进公开文档。修改行为时同步相关文档，不重复复制同一份架构说明。
 
 PR 不得附带个人资料、实际聊天、Cookie、请求令牌或原始网络抓包。新增配置必须有安全默认值；保持单执行器和持久化回执规则，不用自动重试掩盖发送结果不明。
 
