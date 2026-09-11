@@ -58,10 +58,16 @@ test("timeout kills a TERM-ignoring grandchild even after its parent exits", asy
   );
   const pid = Number(fs.readFileSync(pidFile, "utf8"));
   let state = "";
-  try {
-    state = fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(") ")[1][0];
-  } catch (error) {
-    assert.equal(error.code, "ENOENT");
+  // SIGKILL delivery and /proc state publication are asynchronous kernel operations.
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      state = fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(") ")[1][0];
+    } catch (error) {
+      assert.equal(error.code, "ENOENT");
+      state = "";
+    }
+    if (state === "" || state === "Z") break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
   }
   assert.ok(
     state === "" || state === "Z",
