@@ -1,11 +1,7 @@
-import fs from "node:fs";
 import { readHistory } from "./history-read.ts";
 import { deferInbox, stopAll } from "./inbox-retry.ts";
 import { pendingWrite } from "./reconcile.ts";
-import { rejectJobFilters } from "../config/job-filters.ts";
-import { createHash } from "node:crypto";
-import { raiseAlert } from "../storage/alerts.ts";
-import { conversationState, RESUME_FILE } from "./conversation-policy.ts";
+import { conversationState } from "./conversation-policy.ts";
 import type {
   Contact,
   InboxContactContext,
@@ -16,6 +12,7 @@ import type {
 export async function processInboxContact(
   {
     root,
+    services,
     report,
     chat,
     decide,
@@ -26,7 +23,8 @@ export async function processInboxContact(
   entry: Contact,
   deadline: number,
 ): Promise<boolean> {
-  const excluded = rejectJobFilters(entry.job);
+  const timestamp = () => new Date(services.now()).toISOString();
+  const excluded = services.rejectJob(entry.job);
   if (excluded) {
     entry.pendingUser = excluded;
     report.inboxSummary.excluded = (report.inboxSummary.excluded || 0) + 1;
@@ -48,7 +46,7 @@ export async function processInboxContact(
     });
     entry.historyFailures = (entry.historyFailures || 0) + 1;
     save();
-    raiseAlert(root, {
+    services.alert({
       kind: "history_read_failed",
       contact: entry.job.id,
       reason: "某已联系HR历史暂时读取失败，轮询会继续重试。",
@@ -67,11 +65,11 @@ export async function processInboxContact(
   report.historyChecks.push({
     jobId: entry.job.id,
     status: "read",
-    at: new Date().toISOString(),
+    at: timestamp(),
   });
   save();
   let state = conversationState(history);
-  entry.platformCheckedAt = new Date().toISOString();
+  entry.platformCheckedAt = timestamp();
   entry.platformHistory = history; // Current UI is authoritative, including manual activity.
   if (state.receipt) {
     entry.platformAttachment = {
@@ -86,23 +84,23 @@ export async function processInboxContact(
     const intent: SendIntent = {
       kind: "attachment",
       jobId: entry.job.id,
-      filename: RESUME_FILE,
+      filename: services.resumeFile,
       status: "prepared",
-      at: new Date().toISOString(),
+      at: timestamp(),
     };
     report.intents.push(intent);
     save();
     progress("send_requested_resume", { company: entry.job.company });
     const receipt = await chat.sendResume(
       entry.job,
-      RESUME_FILE,
+      services.resumeFile,
       history,
       () => {
         assertAuthority();
         intent.status = "outcome_unknown";
         entry.status = "outcome_unknown";
         entry.pendingWrite = pendingWrite("attachment", history, {
-          filename: RESUME_FILE,
+          filename: services.resumeFile,
         });
         save();
       },
@@ -128,20 +126,7 @@ export async function processInboxContact(
     report.inboxSummary.noNewMessage++;
     return true;
   }
-  const hash = createHash("sha256")
-    .update(
-      JSON.stringify(history.messages) +
-        fs.readFileSync(root + "/candidate-profile.md", "utf8") +
-        fs.readFileSync(
-          new URL("../../prompts/reply.md", import.meta.url),
-          "utf8",
-        ) +
-        fs.readFileSync(
-          new URL("../../prompts/common.md", import.meta.url),
-          "utf8",
-        ),
-    )
-    .digest("hex");
+  const hash = services.fingerprint(history);
   // A resume receipt does not answer other questions from HR.
   if (entry.lastHandledHistory === hash) {
     report.inboxSummary.alreadyHandled++;
@@ -160,18 +145,18 @@ export async function processInboxContact(
     action: decision.action,
     reason: decision.reason || null,
     retryable: !!decision.retryable,
-    at: new Date().toISOString(),
+    at: timestamp(),
   };
   if (decision.action === "reply")
     entry.replyDraft = {
       historyHash: hash,
       decision,
-      createdAt: cached?.createdAt || new Date().toISOString(),
+      createdAt: cached?.createdAt || timestamp(),
     };
   save();
-  if (Date.now() >= deadline) {
+  if (services.now() >= deadline) {
     report.inboxDeferred = true;
-    entry.replyDeferredAt = new Date().toISOString();
+    entry.replyDeferredAt = timestamp();
     save();
     return false;
   }
@@ -180,7 +165,7 @@ export async function processInboxContact(
     entry.pendingUser = decision.reason;
     if (!decision.retryable) entry.lastHandledHistory = hash;
     save();
-    raiseAlert(root, {
+    services.alert({
       kind: "hr_pending",
       contact: entry.job.id,
       reason: decision.reason,
@@ -191,7 +176,7 @@ export async function processInboxContact(
     kind: "reply",
     jobId: entry.job.id,
     message: decision.message,
-    at: new Date().toISOString(),
+    at: timestamp(),
     status: "prepared",
   };
   report.intents.push(intent);

@@ -16,6 +16,8 @@ src/runtime/            TS 调度、子进程监督、互斥、健康检查
 
 收件箱批量扫描/游标留在 application/inbox.ts；单联系人附件、回复草稿及发送放在 inbox-contact.ts，经 ChatPort、decide、save、assertAuthority 注入能力。进程监督模块不导入浏览器或业务工作流。入口可以组装这些层，禁止让浏览器适配器自行启动调度器。
 
+单联系人流程通过 `InboxServices` 注入简历文件名、筛选、上下文指纹、告警和时钟；`runtime/inbox-services.ts` 绑定真实配置/文件。上下文每次读取，不缓存人工修改的简历和提示词；指纹算法保持兼容已有草稿。`ReplyDraft`、`InboxRetry` 有显式类型。当前批量入口仍负责默认装配，历史读取重试/对账仍依赖既有模块，并非所有层都已完全解耦。
+
 `npm run typecheck` 检查全部运行源码；监督器与公共契约额外开启 strict 检查。历史动态平台字段尚保留显式宽类型，逐步收紧，不使用 ts-nocheck 或关闭编译检查来伪装迁移完成。测试以 Node 原生 TS 支持执行。没有独立 dist 目录，避免源码/产物混用。
 
 ## 从旧版升级

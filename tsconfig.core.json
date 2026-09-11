@@ -3,6 +3,7 @@
   "compilerOptions": { "strict": true },
   "include": [
     "src/domain/contracts.ts",
+    "src/domain/reply-fingerprint.ts",
     "src/runtime/process-supervisor.ts",
     "src/runtime/scheduler.ts"
   ]

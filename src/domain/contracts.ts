@@ -34,6 +34,19 @@ export interface Contact extends PlatformRecord {
   status: string;
   cycle?: string;
   intent?: SendIntent;
+  replyDraft?: ReplyDraft;
+  inboxRetry?: InboxRetry;
+}
+export interface ReplyDraft {
+  historyHash: string;
+  decision: Decision;
+  createdAt: string;
+}
+export interface InboxRetry {
+  attempts: number;
+  reason: string;
+  nextAt: string;
+  needsAttention: boolean;
 }
 export interface CycleReport extends PlatformRecord {
   id: string;
@@ -71,10 +84,18 @@ export interface ChatPort {
 }
 export interface InboxContactContext {
   root: string;
+  services: InboxServices;
   report: CycleReport;
   chat: ChatPort;
   decide: (job: Job, history: Conversation, mode: "reply") => Promise<Decision>;
   progress: (phase: string, details: PlatformRecord) => void;
   save: () => void;
   assertAuthority: () => void;
+}
+export interface InboxServices {
+  resumeFile: string;
+  now: () => number;
+  rejectJob: (job: Job) => string | null | undefined;
+  fingerprint: (history: Conversation) => string;
+  alert: (alert: { kind: string; contact: string; reason?: string }) => void;
 }

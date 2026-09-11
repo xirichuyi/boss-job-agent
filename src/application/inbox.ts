@@ -4,6 +4,8 @@ import { loadJobFilters } from "../config/job-filters.ts";
 import { readState } from "../storage/harness.ts";
 import { atomicJson } from "../storage/state.ts";
 import { selectInboxBatch, classifyFailure } from "../domain/recovery.ts";
+import { processInboxContact } from "./inbox-contact.ts";
+import { createInboxServices } from "../runtime/inbox-services.ts";
 export async function checkInbox({
   root,
   ledger,
@@ -14,6 +16,7 @@ export async function checkInbox({
   save,
   assertAuthority,
   deadline = Infinity,
+  services = createInboxServices(root),
 }) {
   // Existing verified contacts only. No responding to unknown-company inboxes.
   const inboxPath = root + "/memory/inbox-cursor.json";
@@ -107,7 +110,16 @@ export async function checkInbox({
     try {
       if (
         !(await processInboxContact(
-          { root, report, chat, decide, progress, save, assertAuthority },
+          {
+            root,
+            report,
+            chat,
+            decide,
+            progress,
+            save,
+            assertAuthority,
+            services,
+          },
           entry,
           deadline,
         ))
@@ -142,4 +154,3 @@ export async function checkInbox({
       : 0,
   });
 }
-import { processInboxContact } from "./inbox-contact.ts";
