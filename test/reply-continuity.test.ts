@@ -44,6 +44,15 @@ test("temporary read gets one retry, while identity or authentication error is n
   count = 0;
   chat.openConversation = async () => {
     count++;
+    throw Object.assign(Error("页面内容未就绪：CONTACT_VIEW_MISMATCH"), {
+      code: "CONTACT_VIEW_MISMATCH",
+    });
+  };
+  await assert.rejects(readHistory(chat, {}), /CONTACT_VIEW_MISMATCH/);
+  assert.equal(count, 1, "adapter retry exhaustion must not be retried again");
+  count = 0;
+  chat.openConversation = async () => {
+    count++;
     throw Error("页面内容未就绪");
   };
   await assert.rejects(readHistory(chat, {}, { deadline: Date.now() + 1000 }));

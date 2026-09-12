@@ -11,6 +11,9 @@ export async function readHistory(
   } catch (error) {
     if (
       stopAll(error) ||
+      // The adapter already made its one native-search retry. Do not multiply
+      // retry budgets across layers and starve the rest of the inbox.
+      error.code === "CONTACT_VIEW_MISMATCH" ||
       Date.now() + executionConfig().inboxRetry.readRetryMinRemainingMs >=
         deadline ||
       !/页面内容未就绪|CONTACT_LOOKUP_FAILED/.test(error.message)
