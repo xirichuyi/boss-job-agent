@@ -10,16 +10,32 @@
 
 ```text
 请安装 https://github.com/xirichuyi/boss-job-agent，先读 README、SECURITY 和 docs/DEPLOYMENT-ACCEPTANCE.md。
-1. 确认我的目录、求职偏好、模型、简历和平台附件名。检查 Linux、Node.js 24+、flock、Codex 和 Chrome；使用非 root 用户完成 Codex 登录，不复制作者账号。已有安装先暂停、等在途任务结束并备份 SQLite/配置，禁止重新初始化或覆盖。
-2. 新安装执行 npm ci、npm run check、npm run test:install。参考 examples/setup-answers.json 写本人答案，再用 npm run onboard 初始化独立的 BOSS_CONFIG_DIR 和 BOSS_DATA_DIR。路径、模型、偏好写配置，不改源码。
+1. 确认我的目录、求职偏好、模型、简历和平台附件名。支持的全新 Linux 主机把项目放 /opt 下，执行 sudo bash scripts/install-system.sh 自动安装必需环境；使用非 root 用户完成 Codex 登录，不复制作者账号。已有安装先暂停、等在途任务结束并备份 SQLite/配置，禁止重新初始化或覆盖。
+2. 新安装执行 npm ci、npm run check、npm run test:install。按 docs/INSTALL.md 使用 npm run install:agent 创建工作区，通过 status/continue 查看进度；工作区独立生成 BOSS_CONFIG_DIR 和 BOSS_DATA_DIR。支持先扫码、后填写资料，路径、模型、偏好写配置，不改源码。
 3. 浏览器目录用 BOSS_RPA_DATA_DIR；浏览器桌面也需常驻。CDP/VNC只本地监听，通过 SSH 或认证网关让我扫码，不关闭 sandbox、不擅自开放公网端口。运行 doctor/health/status 核对。
-4. 首次 perRun=1，等待明确授权后才启用真实发送并执行一轮，以定制正文和送达回执验收。回复、附件、验证恢复没有真实场景就标记未验证，不伪造聊天。
+4. 首次 perRun=1，等待明确授权后通过 accept 执行单轮，以定制正文和送达回执验收；随后 activate 展示并确认正式每轮人数、间隔、每日上限。回复、附件、验证恢复没有真实场景就标记未验证，不伪造聊天。
 5. 验收后按 deploy 模板配置常驻服务，终端和服务使用相同目录与用户；不覆盖已有服务。交付版本、路径、暂停/恢复命令和未通过项。Telegram可选，不逐步播报。
 ```
 
 ## 安装
 
-前置：Linux、Node.js 24+、util-linux（flock）、已登录的 Codex CLI、Chrome/Chromium。无桌面的服务器还需 Xvfb、fluxbox、x11vnc、noVNC/websockify、xdpyinfo。
+### 一键准备必需环境
+
+将项目下载到 `/opt` 下，在项目目录执行：
+
+```bash
+sudo bash scripts/install-system.sh
+```
+
+支持 Debian 12/13（amd64/arm64）、Ubuntu 22.04/24.04（amd64），需要 systemd 和网络。自动安装 Node 24、Codex、Chrome/Chromium、远程桌面、中文字体、PDF/Word 转换工具及项目依赖，创建非 root 用户和服务，启动扫码桌面。已有可用程序会复用，不复制登录凭据、不开放公网端口。
+
+完成后运行 `sudo boss-agent configure` 填偏好，`sudo boss-agent profile --paste` 粘贴简历；终端会显示后续确认、登录和扫码步骤。`sudo boss-agent status` 查看进度。**环境装好不等于已开始投递，账号登录、扫码和真实发送仍需本人授权。**
+
+`--plan` 只查看计划；失败后重跑同一命令。不覆盖其他部署、资料或修改过的服务。更多说明见 [安装流程](docs/INSTALL.md)。
+
+### 手动安装
+
+自行准备 Linux、Node.js 24+、util-linux（flock）、Codex CLI、Chrome/Chromium。无桌面服务器另需 Xvfb、fluxbox、x11vnc、noVNC/websockify、xdpyinfo。
 
 ```bash
 git clone https://github.com/xirichuyi/boss-job-agent.git
@@ -28,7 +44,16 @@ npm ci
 npm run check
 ```
 
-准备自己的 `answers.json`（参考 [示例](examples/setup-answers.json)）和 Markdown 简历，一条命令初始化新安装：
+推荐使用可恢复的统一入口，以最终非 root 服务用户执行：
+
+```bash
+npm run install:agent -- init --workspace /自己的可写目录/boss-install
+npm run install:agent -- status --workspace /自己的可写目录/boss-install
+```
+
+`status` 显示已完成、失败和下一步；中断后用同一目录执行 `continue`。可先启动扫码桌面，再粘贴简历或导入 PDF/Word。完整命令表见 [安装流程](docs/INSTALL.md)。薪资使用**税前元/月**；验收和正式运行参数分别确认。
+
+旧的轻量初始化入口仍保留：准备自己的 `answers.json`（参考 [示例](examples/setup-answers.json)）和真实简历文件：
 
 ```bash
 npm run onboard -- --answers /绝对路径/answers.json --profile /绝对路径/resume.md --config /绝对路径/boss-config --data /绝对路径/boss-data

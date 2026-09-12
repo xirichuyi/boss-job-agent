@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { CODE_ROOT } from "../src/project-root.ts";
 import { planSetup, writeSetup } from "../src/config/setup.ts";
+import { importProfile } from "../src/config/profile-import.ts";
 
 const usage =
   "npm run onboard -- --answers answers.json --profile resume.md --config 新配置目录 --data 新数据目录";
@@ -38,7 +39,7 @@ if (args.length === 1 && args[0] === "--help") {
   const files = planSetup(
     JSON.parse(fs.readFileSync(options.get("--answers")!, "utf8")),
   );
-  const profile = fs.readFileSync(options.get("--profile")!, "utf8");
+  const profile = importProfile(options.get("--profile")!).trimEnd();
   if (!profile.trim()) throw Error("简历文档为空");
   // All input checks precede writes. Partial failures are retained for inspection.
   writeSetup(directory, files);

@@ -5,6 +5,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "install:agent": "node scripts/install-agent.ts",
     "onboard": "node scripts/onboard.ts",
     "test:install": "node scripts/local-acceptance.ts",
     "doctor": "node scripts/doctor.ts",

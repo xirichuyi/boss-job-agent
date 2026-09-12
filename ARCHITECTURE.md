@@ -8,6 +8,7 @@ TypeScript 模块化单体，Node.js 24 直接执行源码，无 dist。单账�
 | --- | --- |
 | scripts | 安装、初始化、运行、查询等 CLI 入口 |
 | src/config | 配置加载、校验、生效视图 |
+| src/installation | 安装进度、资料导入编排、验收与正式启用、服务模板生成 |
 | src/domain | 业务契约、筛选与恢复规则，不访问外部系统 |
 | src/application | 搜索、联系、回复、附件、对账的业务编排 |
 | src/adapters | 浏览器、模型、Telegram 协议适配 |
@@ -48,6 +49,8 @@ SQLite 使用 WAL、FULL 同步及事务。发送前保存意图，送达后提�
 ## 配置、升级与验证
 
 CODE_ROOT 确定源码位置；BOSS_CONFIG_DIR 放四份配置，BOSS_DATA_DIR 放简历和账本，BOSS_RPA_DATA_DIR 独立存浏览器资料。旧 BOSS_AGENT_ROOT 仅兼容数据根。配置生效范围见 [运行配置](docs/RUNTIME-CONFIG.md)。
+
+新安装使用 `install:agent`；独立 desktop.json 支持先扫码。安装工作区绑定运行用户，阶段验收绑定配置指纹；默认禁发，正式额度与首轮验收分开。流程见 [安装说明](docs/INSTALL.md)。
 
 升级先暂停、等在途任务结束，用 SQLite backup 接口备份账本及私密配置，再替换完整源码；不要重新 init 或回退已发送记录。尚无自动升级/回滚器。
 

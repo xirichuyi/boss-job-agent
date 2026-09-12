@@ -6,7 +6,7 @@ if [[ "${EUID}" -eq 0 ]]; then
   exit 1
 fi
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-desktop_config="$(node "${SCRIPT_DIR}/desktop-config.ts")"
+desktop_config="$("${NODE_BINARY:-node}" "${SCRIPT_DIR}/desktop-config.ts")"
 mapfile -t desktop_values <<< "${desktop_config}"
 readonly BROWSER_BINARY="${desktop_values[0]}"
 readonly CDP_PORT="${desktop_values[1]}"

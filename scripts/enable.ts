@@ -3,10 +3,12 @@ import { ROOT } from "../src/project-root.ts";
 import { readState } from "../src/storage/harness.ts";
 import { atomicJson } from "../src/storage/state.ts";
 import { effectiveConfig } from "../src/config/effective.ts";
+import { validateProfile } from "../src/config/profile-import.ts";
 if (!process.argv.includes("--confirm-real-sends"))
   throw Error("此操作允许真实联系 HR，须由本人授权后传入 --confirm-real-sends");
 effectiveConfig(); // Reject invalid effective filters before authorizing real sends.
 const profile = fs.readFileSync(ROOT + "/candidate-profile.md", "utf8");
+validateProfile(profile);
 if (
   !profile.trim() ||
   /请替换|填写自己的姓名|禁止把示例当真实经历/.test(profile)

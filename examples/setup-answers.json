@@ -1,7 +1,13 @@
 {
   "cities": ["杭州", "深圳"],
-  "minimumMonthlySalaryK": 11,
+  "minimumMonthlySalaryYuan": 11000,
   "minimumCompanySize": 500,
   "keywords": ["Go开发", "AI应用开发", "产品经理"],
-  "resumeFile": "resume.pdf"
+  "resumeFile": "resume.pdf",
+  "directions": "产品或开发",
+  "ignoreEducationAndExperience": true,
+  "excludeInternships": true,
+  "intervalMinutes": 30,
+  "dailyNewContactLimit": 70,
+  "perRun": 5
 }

@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createInterface } from "node:readline/promises";
+import { setupForm } from "../src/config/setup-form.ts";
 import { ROOT } from "../src/project-root.ts";
 import { planSetup, writeSetup } from "../src/config/setup.ts";
 const args = process.argv.slice(2);
@@ -20,49 +20,7 @@ try {
     let answers;
     const file = option("--answers");
     if (file) answers = JSON.parse(fs.readFileSync(file, "utf8"));
-    else {
-      if (!process.stdin.isTTY)
-        throw Error("非交互环境请提供 --answers 文件，或在终端运行安装向导");
-      const rl = createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-      try {
-        const cities = await rl.question(
-          "城市（杭州、深圳、成都、南京，用逗号分隔；留空保留四城）：",
-        );
-        const salary = await rl.question("月薪下限K（默认11）：");
-        const size = await rl.question(
-          "公司人数下限（20/100/500/1000/10000，默认500）：",
-        );
-        const words = await rl.question(
-          "岗位关键词（逗号分隔；留空使用默认产品/开发方向）：",
-        );
-        const resume = await rl.question(
-          "BOSS附件简历文件名（默认resume.pdf）：",
-        );
-        const model = await rl.question(
-          "模型名称（留空保留默认；请核实账号权限）：",
-        );
-        const effort = await rl.question("推理强度（留空保留默认）：");
-        const split = (s) =>
-          s
-            .split(/[,，]/)
-            .map((x) => x.trim())
-            .filter(Boolean);
-        answers = {
-          ...(cities ? { cities: split(cities) } : {}),
-          ...(salary ? { minimumMonthlySalaryK: Number(salary) } : {}),
-          ...(size ? { minimumCompanySize: Number(size) } : {}),
-          ...(words ? { keywords: split(words) } : {}),
-          ...(resume ? { resumeFile: resume } : {}),
-          ...(model ? { model } : {}),
-          ...(effort ? { reasoningEffort: effort } : {}),
-        };
-      } finally {
-        rl.close();
-      }
-    }
+    else answers = await setupForm();
     const files = planSetup(answers),
       directory = path.resolve(
         option("--output") || path.join(ROOT, "config/private-local"),
@@ -72,6 +30,18 @@ try {
         JSON.stringify({ output: directory, files, dryRun: true }, null, 2),
       );
     else {
+      console.log(
+        JSON.stringify(
+          {
+            salaryBeforeTaxYuanPerMonth:
+              files["job-filters"].minimumMonthlySalaryK * 1000,
+            schedule: files.agent.schedule,
+            model: files.model,
+          },
+          null,
+          2,
+        ),
+      );
       writeSetup(directory, files);
       const quoted = "'" + directory.replaceAll("'", "'\\''") + "'";
       console.log(

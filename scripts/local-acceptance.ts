@@ -102,6 +102,42 @@ try {
     ["scripts/init.ts"],
     1,
   );
+  const installation = path.join(sandbox, "installation");
+  const profile = path.join(sandbox, "test-profile.md");
+  fs.writeFileSync(
+    profile,
+    "Local installation test: Go backend project experience.",
+    { mode: 0o600 },
+  );
+  const install = (name, action, args = []) =>
+    run(name, process.execPath, [
+      "scripts/install-agent.ts",
+      action,
+      "--workspace",
+      installation,
+      ...args,
+    ]);
+  install("create resumable installation workspace", "init");
+  install("preview all installation preferences", "configure", [
+    "--answers",
+    "examples/setup-answers.json",
+  ]);
+  install("confirm saved configuration draft", "configure", ["--confirm"]);
+  install("preview local resume import", "profile", ["--file", profile]);
+  install("confirm saved resume draft", "profile", ["--confirm"]);
+  install("initialize installation workspace", "initialize");
+  install("resume initialization without clearing ledger", "initialize");
+  const installed = JSON.parse(
+    install(
+      "report installation without claiming active job search",
+      "continue",
+    ),
+  );
+  if (
+    installed.mode !== "已初始化，未运行" ||
+    installed.checks.find((c) => c.step === "正式参数确认").done
+  )
+    throw Error("统一安装入口错误启用或虚报正式运行");
   console.log("隔离安装验收通过；未连接浏览器、未调用模型、未发送消息。");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

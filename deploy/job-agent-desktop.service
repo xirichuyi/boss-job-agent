@@ -1,0 +1,19 @@
+[Unit]
+Description=Job agent browser desktop (loopback only)
+After=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@ROOT@
+Environment="BOSS_DESKTOP_CONFIG=@DESKTOP_CONFIG@"
+Environment="BOSS_RPA_DATA_DIR=@BROWSER_DATA@"
+Environment="NODE_BINARY=@NODE@"
+ExecStart=/bin/bash "@ROOT@/scripts/start-desktop.sh"
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

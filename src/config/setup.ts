@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { configFile } from "./files.ts";
+import { resolveExecutable } from "./executable.ts";
 
 export function planSetup(answers) {
   const keys = [
@@ -13,6 +14,13 @@ export function planSetup(answers) {
     "reasoningEffort",
     "browserBinary",
     "codexBinary",
+    "minimumMonthlySalaryYuan",
+    "intervalMinutes",
+    "dailyNewContactLimit",
+    "perRun",
+    "directions",
+    "ignoreEducationAndExperience",
+    "excludeInternships",
   ];
   if (
     !answers ||
@@ -54,8 +62,22 @@ export function planSetup(answers) {
     throw Error(
       "城市需填写已知名称，或 {name, code}；编码为平台9位城市码，不可重复",
     );
+  if (
+    answers.minimumMonthlySalaryYuan !== undefined &&
+    answers.minimumMonthlySalaryK !== undefined
+  )
+    throw Error("薪资只能填写一个单位字段");
+  if (
+    answers.minimumMonthlySalaryYuan !== undefined &&
+    (!Number.isInteger(answers.minimumMonthlySalaryYuan) ||
+      answers.minimumMonthlySalaryYuan < 1000)
+  )
+    throw Error("薪资请填税前元/月整数，如6000；不要填6/月或6K");
   const min =
-    answers.minimumMonthlySalaryK ?? files["job-filters"].minimumMonthlySalaryK;
+    answers.minimumMonthlySalaryYuan !== undefined
+      ? answers.minimumMonthlySalaryYuan / 1000
+      : (answers.minimumMonthlySalaryK ??
+        files["job-filters"].minimumMonthlySalaryK);
   if (!Number.isFinite(min) || min < 0)
     throw Error("月薪下限必须是非负数字，单位K");
   const size =
@@ -104,7 +126,35 @@ export function planSetup(answers) {
   files.agent.search.nativeScaleCodes = codes[size];
   files.agent.search.keywords = words;
   files.agent.resumeFile = resume;
+  const productionPerRun = answers.perRun ?? files.agent.schedule.perRun;
   files.agent.schedule.perRun = 1;
+  for (const [key, max] of [
+    ["intervalMinutes", 1440],
+    ["dailyNewContactLimit", 70],
+    ["perRun", 10],
+  ] as const) {
+    const value =
+      key === "perRun"
+        ? productionPerRun
+        : (answers[key] ?? files.agent.schedule[key]);
+    if (!Number.isInteger(value) || value < 1 || value > max)
+      throw Error(key + " 超出范围1–" + max);
+    if (key === "perRun")
+      files.agent.schedule.productionPerRun = productionPerRun;
+    else files.agent.schedule[key] = value;
+  }
+  if (answers.directions !== undefined) {
+    if (typeof answers.directions !== "string" || !answers.directions.trim())
+      throw Error("岗位方向不能为空");
+    files.agent.search.directions = answers.directions.trim();
+  }
+  for (const key of ["ignoreEducationAndExperience", "excludeInternships"]) {
+    if (answers[key] === undefined) continue;
+    if (typeof answers[key] !== "boolean") throw Error(key + " 必须是布尔值");
+    (key === "excludeInternships" ? files["job-filters"] : files.agent.search)[
+      key
+    ] = answers[key];
+  }
   for (const [answer, section] of [
     ["browserBinary", "browser"],
     ["codexBinary", "codex"],
@@ -119,6 +169,8 @@ export function planSetup(answers) {
     files.agent[section].binary = answers[answer];
   }
   files.model = { model, reasoningEffort: effort };
+  files.agent.browser.binary = resolveExecutable(files.agent.browser.binary);
+  files.agent.codex.binary = resolveExecutable(files.agent.codex.binary);
   return files;
 }
 export function writeSetup(directory, files) {
