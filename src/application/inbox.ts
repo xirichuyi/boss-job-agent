@@ -6,6 +6,7 @@ import { atomicJson } from "../storage/state.ts";
 import { selectInboxBatch, classifyFailure } from "../domain/recovery.ts";
 import { processInboxContact } from "./inbox-contact.ts";
 import { createInboxServices } from "../runtime/inbox-services.ts";
+import { conversationCompany } from "../domain/conversation-identity.ts";
 export async function checkInbox({
   root,
   ledger,
@@ -33,7 +34,8 @@ export async function checkInbox({
         ),
       });
       const matches = (row, e) =>
-        row.recruiter === e.job.recruiter && row.label.includes(e.job.company);
+        row.recruiter === e.job.recruiter &&
+        row.label.includes(conversationCompany(e.job));
       const unread = discovery.rows.filter((r) => r.unread);
       visibleRows = discovery.rows;
       unreadEntries = eligible.filter((e) => unread.some((r) => matches(r, e)));
@@ -65,7 +67,9 @@ export async function checkInbox({
   // Prioritize all known unread contacts, including those outside the cursor slice.
   const visibleEntries = batch.entries.filter((e) =>
     visibleRows.some(
-      (r) => r.recruiter === e.job.recruiter && r.label.includes(e.job.company),
+      (r) =>
+        r.recruiter === e.job.recruiter &&
+        r.label.includes(conversationCompany(e.job)),
     ),
   );
   const drafts = eligible

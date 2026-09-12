@@ -1,6 +1,12 @@
 import { AGENT } from "../../config/agent.ts";
 import { detailViewExpression } from "./detail-view.ts";
 import {
+  visibleResumeDialogExpression,
+  finishClosingResumeDialogExpression,
+} from "./resume-dialog.ts";
+import { conversationIdentityExpression } from "./conversation-view.ts";
+import { conversationCompany } from "../../domain/conversation-identity.ts";
+import {
   jobIdsExpression,
   advanceJobsExpression,
   hasNewIds,
@@ -106,6 +112,7 @@ export class VisibleTools extends BossTools {
                   company: d.brandComInfo?.brandName,
                   companySize: d.brandComInfo?.scaleName,
                   recruiter: d.bossInfo?.name,
+                  recruiterCompany: d.bossInfo?.brandName,
                   identity: `${d.bossInfo?.brandName} · ${d.bossInfo?.title}`,
                   location: j.locationName,
                   receivedAt: new Date().toISOString(),
@@ -444,7 +451,7 @@ export class VisibleTools extends BossTools {
         rows.some(
           (r) =>
             r.recruiter === findJob.recruiter &&
-            r.label.includes(findJob.company),
+            r.label.includes(conversationCompany(findJob)),
         )
       )
         return { rows: [...seen.values()], found: true, complete: false };
@@ -458,11 +465,12 @@ export class VisibleTools extends BossTools {
     }
     return { rows: [...seen.values()], found: false, complete: atEnd };
   }
-  async openConversation(job) {
+  async openConversation(job, retryLookup = true, forceSearch = false) {
+    job = { ...job, company: conversationCompany(job) }; // Local view only; never rewrite employer ledger.
     await this.clearSearch();
     const expression = `(()=>{const matches=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>{const n=e.querySelector('.name-box');return n&&n.innerText.includes(${JSON.stringify(job.company)})&&n.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)}});if(matches.length!==1)return null;return matches[0].innerText})()`;
     let opened = false;
-    if (!(await this.evaluate(expression))) {
+    if (forceSearch || !(await this.evaluate(expression))) {
       // Platform search is not limited to the currently virtualized list rows.
       const result = await this.searchHistory(job.company);
       if (!result.empty) {
@@ -492,9 +500,22 @@ export class VisibleTools extends BossTools {
         `(()=>{const rows=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>e.querySelector('.name-box')?.innerText.includes(${JSON.stringify(job.company)})&&e.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)});if(rows.length!==1)throw Error('联系人不唯一');rows[0].querySelector('.friend-content').click();return true})()`,
       );
     }
-    return this.until(
-      `(()=>{const c=document.querySelector('.chat-conversation');if(!c||!c.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)})||!c.innerText.includes(${JSON.stringify(job.title)}))return null;return {text:c.innerText,messages:[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))}})()`,
-    );
+    try {
+      return await this.until(
+        `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;return {text:c.innerText,messages:[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))}})()`,
+      );
+    } catch (error) {
+      if (error.message !== "页面内容未就绪；未刷新或重复导航") throw error;
+      // A list click can be ignored while the platform updates its virtual rows.
+      // One fresh native search is read-only; never repeat a send here.
+      if (retryLookup) return this.openConversation(job, false, true);
+      throw Object.assign(
+        Error(
+          "页面内容未就绪：CONTACT_VIEW_MISMATCH，联系人或岗位身份未切换；未发送",
+        ),
+        { code: "CONTACT_VIEW_MISMATCH" },
+      );
+    }
   }
   async contactReady(job) {
     await this.guard();
@@ -526,14 +547,15 @@ export class VisibleTools extends BossTools {
     await this.guard();
     persistAttempt();
     await this.evaluate(
-      `(()=>{const c=document.querySelector('.chat-conversation');if(!c?.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)})||!c.innerText.includes(${JSON.stringify(job.title)})||c.querySelector('.chat-input')?.innerText!==${JSON.stringify(message)})throw Error('发送目标或输入变化');const m=[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}));if(JSON.stringify(m)!==${JSON.stringify(JSON.stringify(before.messages))})throw Error('发送前历史变化');const b=c.querySelector('.btn-send');if(!b||b.classList.contains('disabled'))throw Error('发送按钮不可用');b.click();return true})()`,
+      `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)}||c.querySelector('.chat-input')?.innerText!==${JSON.stringify(message)})throw Error('发送目标或输入变化');const m=[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}));if(JSON.stringify(m)!==${JSON.stringify(JSON.stringify(before.messages))})throw Error('发送前历史变化');const b=c.querySelector('.btn-send');if(!b||b.classList.contains('disabled'))throw Error('发送按钮不可用');b.click();return true})()`,
     );
     return this.until(
-      `(()=>{const c=document.querySelector('.chat-conversation');if(!c?.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)}))return null;const m=[...c.querySelectorAll('.message-item.item-myself')].filter(e=>e.innerText.includes(${JSON.stringify(message)}));return m.length===1&&/送达|已读/.test(m[0].innerText)?{text:m[0].innerText,confirmedAt:new Date().toISOString()}:null})()`,
+      `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;const m=[...c.querySelectorAll('.message-item.item-myself')].filter(e=>e.innerText.includes(${JSON.stringify(message)}));return m.length===1&&/送达|已读/.test(m[0].innerText)?{text:m[0].innerText,confirmedAt:new Date().toISOString()}:null})()`,
       25000,
     );
   }
   async sendResume(job, filename, before, persistAttempt) {
+    job = { ...job, company: conversationCompany(job) };
     if (filename !== AGENT.resumeFile) throw Error("附件版本未授权");
     const current = await this.openConversation(job);
     if (JSON.stringify(current.messages) !== JSON.stringify(before.messages))
@@ -547,18 +569,21 @@ export class VisibleTools extends BossTools {
     )
       throw Error("平台已有附件记录，禁止重复发送");
     const historyExpression = `[...document.querySelectorAll('.chat-conversation .message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))`;
+    let openedDialog = false;
+    await this.evaluate(finishClosingResumeDialogExpression);
     try {
       await this.evaluate(
-        `(()=>{if(document.querySelector('.boss-popup__wrapper.choose-resume-dialog'))throw Error('已有简历弹窗，暂停核对');const b=document.querySelector('.chat-conversation [d-c="62009"]');if(!b)throw Error('发简历控件不可用');b.click();return true})()`,
+        `(()=>{if(${visibleResumeDialogExpression})throw Error('已有简历弹窗，暂停核对');const b=document.querySelector('.chat-conversation [d-c="62009"]');if(!b||b.classList.contains('unable')||b.classList.contains('disabled')||b.getAttribute('aria-disabled')==='true')throw Error('发简历控件不可用');b.click();return true})()`,
       );
+      openedDialog = true;
       await this.until(
-        `document.querySelector('.boss-popup__wrapper.choose-resume-dialog .resume-list')?true:null`,
+        `(${visibleResumeDialogExpression})?.querySelector('.resume-list')?true:null`,
       );
       await this.evaluate(
-        `(()=>{const d=document.querySelector('.boss-popup__wrapper.choose-resume-dialog');const rows=[...d.querySelectorAll('.list-item')].filter(e=>e.querySelector('.resume-name')?.textContent===${JSON.stringify(filename)});if(rows.length!==1)throw Error('指定简历不唯一或不存在');rows[0].click();return true})()`,
+        `(()=>{const d=${visibleResumeDialogExpression};const rows=[...d.querySelectorAll('.list-item')].filter(e=>e.querySelector('.resume-name')?.textContent===${JSON.stringify(filename)});if(rows.length!==1)throw Error('指定简历不唯一或不存在');rows[0].click();return true})()`,
       );
       await this.until(
-        `(()=>{const d=document.querySelector('.boss-popup__wrapper.choose-resume-dialog');const b=d?.querySelector('.btn-confirm');return d?.querySelector('.list-item.selected .resume-name')?.textContent===${JSON.stringify(filename)}&&b&&!b.disabled&&!b.classList.contains('disabled')?true:null})()`,
+        `(()=>{const d=${visibleResumeDialogExpression};const b=d?.querySelector('.btn-confirm');return d?.querySelector('.list-item.selected .resume-name')?.textContent===${JSON.stringify(filename)}&&b&&!b.disabled&&!b.classList.contains('disabled')?true:null})()`,
       );
       await this.guard();
       if (
@@ -568,17 +593,22 @@ export class VisibleTools extends BossTools {
         throw Error("发送前历史变化");
       persistAttempt();
       await this.evaluate(
-        `(()=>{const c=document.querySelector('.chat-conversation'),d=document.querySelector('.boss-popup__wrapper.choose-resume-dialog');if(!c?.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)})||!c.innerText.includes(${JSON.stringify(job.title)}))throw Error('发送目标变化');if(JSON.stringify(${historyExpression})!==${JSON.stringify(JSON.stringify(before.messages))})throw Error('发送前历史变化');if(d?.querySelector('.list-item.selected .resume-name')?.textContent!==${JSON.stringify(filename)})throw Error('附件选择变化');const b=d.querySelector('.btn-confirm');if(!b||b.disabled||b.classList.contains('disabled'))throw Error('发送按钮不可用');b.click();return true})()`,
+        `(()=>{const c=document.querySelector('.chat-conversation'),d=${visibleResumeDialogExpression};if(!${conversationIdentityExpression(job)})throw Error('发送目标变化');if(JSON.stringify(${historyExpression})!==${JSON.stringify(JSON.stringify(before.messages))})throw Error('发送前历史变化');if(d?.querySelector('.list-item.selected .resume-name')?.textContent!==${JSON.stringify(filename)})throw Error('附件选择变化');const b=d.querySelector('.btn-confirm');if(!b||b.disabled||b.classList.contains('disabled'))throw Error('发送按钮不可用');b.click();return true})()`,
       );
       const ids = before.messages.map((m) => m.id);
       return await this.until(
-        `(()=>{const c=document.querySelector('.chat-conversation');if(!c?.innerText.includes(${JSON.stringify(job.company)})||!c.innerText.includes(${JSON.stringify(job.recruiter)}))return null;const r=[...c.querySelectorAll('.message-item.item-system')].find(e=>!${JSON.stringify(ids)}.includes(e.getAttribute('data-mid'))&&(e.innerText.includes('您的附件简历')&&e.innerText.includes('已发送给Boss')));return r?{kind:'attachment',filename:${JSON.stringify(filename)},id:r.getAttribute('data-mid'),text:r.innerText,confirmedAt:new Date().toISOString()}:null})()`,
+        `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;const r=[...c.querySelectorAll('.message-item.item-system')].find(e=>!${JSON.stringify(ids)}.includes(e.getAttribute('data-mid'))&&(e.innerText.includes('您的附件简历')&&e.innerText.includes('已发送给Boss')));return r?{kind:'attachment',filename:${JSON.stringify(filename)},id:r.getAttribute('data-mid'),text:r.innerText,confirmedAt:new Date().toISOString()}:null})()`,
         25000,
       );
     } finally {
-      await this.evaluate(
-        `(()=>{document.querySelector('.boss-popup__wrapper.choose-resume-dialog .boss-popup__close')?.click();return true})()`,
-      ).catch(() => {});
+      if (openedDialog) {
+        await this.evaluate(
+          `(()=>{(${visibleResumeDialogExpression})?.querySelector('.boss-popup__close')?.click();return true})()`,
+        ).catch(() => {});
+        await this.evaluate(finishClosingResumeDialogExpression).catch(
+          () => {},
+        );
+      }
     }
   }
 }
