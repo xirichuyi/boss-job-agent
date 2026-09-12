@@ -1,77 +1,54 @@
-# 运行链路与失败边界
+# 代码架构
 
-本文是架构的唯一维护入口。当前为增量迁移中的 TS 模块化单体，不是已全面解耦的最终状态。
+TypeScript 模块化单体，Node.js 24 直接执行源码，无 dist。单账号共享浏览器和 SQLite，不需要拆成多个业务服务。
 
-## 架构选择与约束
+## 目录职责
 
-采用端口/适配器设计，依据 [Cockburn 原文](https://alistair.cockburn.us/hexagonal-architecture)；单账号、共享浏览器和账本适合保持单体，参考 [Fowler 的 Monolith First](https://martinfowler.com/bliki/MonolithFirst.html)。这些是设计依据，不表示引入了外部框架。
+| 目录 | 职责 |
+| --- | --- |
+| scripts | 安装、初始化、运行、查询等 CLI 入口 |
+| src/config | 配置加载、校验、生效视图 |
+| src/domain | 业务契约、筛选与恢复规则，不访问外部系统 |
+| src/application | 搜索、联系、回复、附件、对账的业务编排 |
+| src/adapters | 浏览器、模型、Telegram 协议适配 |
+| src/storage | SQLite 事务、账本、兼容 JSON 导出 |
+| src/runtime | 调度、进程监督、互斥、健康检查 |
 
-目标依赖：入口与装配层 → 用例和适配器；用例 → 业务规则与接口；适配器实现接口。domain 禁止读取配置、数据库或调用浏览器；application 编排搜索、联系、回复、对账；适配器处理协议；storage 管事务；config 管解析校验；runtime 管监督装配；scripts 只做 CLI 入口。
+入口装配业务与适配器；浏览器适配器不启动调度器。现有 application 仍有直接配置/存储依赖，尚非全面依赖注入。
 
-AST 测试已经检查 domain 导入及 browser 反向依赖，但不是全仓库循环依赖扫描。尚待清理：application 直接访问配置/文件/存储、模型决策实现位置、config/effective 对 runtime 的依赖、scripts 残留业务、账本宽类型和 visible.ts 职责拆分。
-
-重构按业务链逐项迁移并补回归。用户偏好和运行预算归配置，协议常量和安全规则留代码；任何重构不得取消发送前落账、未知结果隔离、人工消息优先。离线测试和真实平台验收分别报告。
-
-## TypeScript 分层
+## 执行链路
 
 ```text
-scripts/                 薄 CLI 入口：加载配置、启动、授权、查询
-src/config/              配置加载、验证与生效视图
-src/domain/              业务契约、筛选规则、恢复决策
-src/application/         搜索、联系、收件箱、单联系人处理、对账
-src/adapters/browser/    CDP、页面定位、原生筛选与送达核对
-src/adapters/model/      模型调用、提示词、上下文、额度
-src/adapters/telegram/   查询与通知通道
-src/storage/            SQLite 账本与兼容 JSON 导出
-src/runtime/            TS 调度、子进程监督、互斥、健康检查
+scheduler → scheduled-agent → run-cycle → cycle-runner
+                                          ├─ 搜索 → JD → 批量生成 → 联系
+                                          └─ 恢复/对账 → 收件箱 → 回复/附件
 ```
 
-收件箱批量扫描/游标留在 application/inbox.ts；单联系人附件、回复草稿及发送放在 inbox-contact.ts，经 ChatPort、decide、save、assertAuthority 注入能力。进程监督模块不导入浏览器或业务工作流。入口可以组装这些层，禁止让浏览器适配器自行启动调度器。
+两条业务分支共享一个租约、账本与额度。搜索和收件箱使用不同标签页；聊天操作经过优先级互斥锁，已开始的发送不被打断。模型在后台线程执行，调用串行，避免阻塞浏览器事件或争用用量记录。
 
-单联系人流程通过 `InboxServices` 注入简历文件名、筛选、上下文指纹、告警和时钟；`runtime/inbox-services.ts` 绑定真实配置/文件。上下文每次读取，不缓存人工修改的简历和提示词；指纹算法保持兼容已有草稿。`ReplyDraft`、`InboxRetry` 有显式类型。当前批量入口仍负责默认装配，历史读取重试/对账仍依赖既有模块，并非所有层都已完全解耦。
+## 浏览器适配层
 
-`npm run typecheck` 检查全部运行源码；监督器与公共契约额外开启 strict 检查。历史动态平台字段尚保留显式宽类型，逐步收紧，不使用 ts-nocheck 或关闭编译检查来伪装迁移完成。测试以 Node 原生 TS 支持执行。没有独立 dist 目录，避免源码/产物混用。
+- `cdp.ts`：连接、协议调用、允许的只读请求。
+- `visible.ts`：页面操作编排；等待预算来自 execution.browser。
+- `detail-view.ts`、`conversation-view.ts`：岗位和联系人身份核对。
+- `chat-history.ts`：统一消息快照，供历史比较和发送核对复用。
+- `resume-dialog.ts`：可见弹窗定位、已关闭弹窗的动画残留恢复。
+- `pagination.ts`：翻页和列表增长检测。
 
-## 从旧版升级
+个人偏好、程序路径和运行预算归配置；平台 DOM、协议字段和安全校验归适配器。不要把平台兼容细节暴露为用户开关。
 
-暂停并等周期结束后备份代码、完整数据库和 unit；部署完整 TS 源码、保留私密配置/profile/memory。scheduler 的 ExecStart 改为 Node + scripts/scheduler.ts，Telegram/watchdog 的入口后缀同样改为 .ts。不要只替换一部分文件，不同时启动 Python/JS 旧入口。旧代码移到备份，不重新 init。节点安装与检查统一用 npm ci、npm run check；随后 doctor/health/status，通过后恢复授权。Linux 仍需要 util-linux 的 flock；不再需要 Python 运行应用。
+## 持久化与恢复
 
-监督参数在 execution.json.supervisor，旧配置缺少此节时兼容既有默认值；默认15分钟硬超时，TERM后10秒KILL整个子进程组，systemd TimeoutStopSec 应大于清理宽限。仅回退代码不等于可以回退账本，禁止丢弃升级期间已发送记录。
+SQLite 使用 WAL、FULL 同步及事务。发送前保存意图，送达后提交回执；未知结果保留隔离和额度，只对账、不盲目重发。人工回复优先，旧草稿必须重新核对历史和资料指纹。
 
-配置入口：config/files.ts 统一解析 BOSS_CONFIG_DIR，config/effective.ts 汇总实际生效值与旧字段提示。model.json → 模型/推理；agent.json → 业务参数；job-filters.json → 城市/薪资/类型；execution.json → 并行/恢复；私密资料 → profile。进程级配置快照避免调用中途改变模型导致回执或冷却记录错配。SQLite 只持久化运行授权、执行进度、额度、请求和账本，不再复制模型/频率参数。
+单联系人失败不阻塞其他联系人；验证、暂停、租约失效和关键存储错误禁止后续发送。所有分支收尾后才提交最终状态。没有平台幂等键，不保证端到端 exactly-once。
 
-| 阶段 | 入口 | 失败处理 |
-| --- | --- | --- |
-| 初始化 | init.ts | 默认关闭真实发送，已有数据库拒绝覆盖 |
-| 定时唤醒 | scheduler.ts | OS 文件锁，单轮15分钟，终止整个子进程组 |
-| 派发 | scheduled-agent.ts | 先检查暂停、维护、限额、上轮恢复；SQLite租约防并发 |
-| 搜索 | application/search.ts | 配置关键词轮换，原生城市/规模筛选，核对响应证据 |
-| 首次联系 | application/outreach.ts | 先读JD与公司历史，最多3项一次生成，再逐条确认当前JD/历史/额度 |
-| 写入 | adapters/browser/visible.ts | 先持久化意图再点击；未知结果隔离，禁止盲重发 |
-| 回复/附件 | application/inbox.ts | 扫描联系人列表与未读标记；已确认联系人轮询优先未读，陌生人进入待核实记录；附件按配置文件名及平台回执 |
-| 对账 | application/reconcile.ts | 只读核对发送前ID基线与唯一新送达消息；确认后恢复联系人，不重放、不追补历史发送计数 |
-| 结果 | application/summary.ts | 区分真正送达、正常零发送、模型异常和执行阻塞 |
-| 恢复 | watchdog.ts | 独立观察服务，尊重暂停/维护，重启不解除发送隔离 |
-| 查询 | telegram-chat.ts | 独立私聊授权、持久化问答队列，不直接操作浏览器 |
+运行预算在 execution.json；默认进程监督超时15分钟，先 TERM 再 KILL 子进程组。Linux flock 和 SQLite 租约防止重复执行。Telegram、watchdog 为可选辅助服务。
 
-SQLite采用WAL、synchronous FULL、事务提交额度+周期、意图+账本、回执+终态。没有平台幂等键，不宣称端到端 exactly-once。模型生成超时可能导致本岗位跳过待重试，限额会让同模型冷却；不自动切换付费模型。
+## 配置、升级与验证
 
-## 单周期内的并行
+CODE_ROOT 确定源码位置；BOSS_CONFIG_DIR 放四份配置，BOSS_DATA_DIR 放简历和账本，BOSS_RPA_DATA_DIR 独立存浏览器资料。旧 BOSS_AGENT_ROOT 仅兼容数据根。配置生效范围见 [运行配置](docs/RUNTIME-CONFIG.md)。
 
-`run-cycle.ts` 管理租约、持久化与收尾，`application/cycle-runner.ts` 在同一 Harness 租约内编排 search / inbox 两个异步分支，共享唯一账本、联系人额度与结果计数；不是两个独立进程各自投递。默认由 `config/execution.json` 开启。
+升级先暂停、等在途任务结束，用 SQLite backup 接口备份账本及私密配置，再替换完整源码；不要重新 init 或回退已发送记录。尚无自动升级/回滚器。
 
-- 搜索使用岗位标签页，收件箱使用聊天标签页；聊天方法统一经过 `runtime/coordinator.ts` 的优先级互斥锁。
-- 收件箱释放聊天锁后才生成回复。模型等待由 `async-decision.ts` 的后台线程承担，主事件循环仍能处理 CDP；模型调用单队列，避免冷却状态并发覆盖。
-- 首次联系的“平台历史复查 → 点击联系 → 核对默认招呼 → 补充消息送达”持有同一把可重入聊天锁，防止 HR 回复任务中途切换对象。
-- 发送前仍重新核对联系人与聊天历史。任一分支致命失败后禁止后续写入；等待所有分支安全结束再关闭 CDP 和提交终态，不能用会提前返回的 Promise.all 直接收尾。
-- 优先级只影响排队任务，不打断已经开始的发送。并行不会增加每日联系限额，也不绕过登录验证或结果未知隔离。
-
-JSON是兼容导出。备份请用SQLite backup接口；不要只复制主数据库而遗漏未checkpoint的WAL。回退旧账本可能重复联系，恢复前必须核对回退期间的发送记录。
-
-模型冷却由 available-decision.ts 转为可重试的延后生成结果，不让派发器提前退出；无模型的读取、对账和已存正文恢复继续。pause/maintenance 只撤销新发送授权，不强杀等待回执的进程；收尾将尚未执行的 prepared 意图取消，已经执行的 unknown 意图保留待核实。TypeScript runtime/process-supervisor.ts 承担进程组硬超时与退出清理；Linux flock 仍提供操作系统级互斥。
-
-部署边界与开源版复现步骤见 [部署验收](docs/DEPLOYMENT-ACCEPTANCE.md)。CODE_ROOT 从模块路径确定；BOSS_DATA_DIR 指定个人资料和 memory 数据根，兼容旧 BOSS_AGENT_ROOT 别名。调度子进程和模型 schema 固定从代码根加载，配置目录由 BOSS_CONFIG_DIR 指定。未设置环境变量时保留原地安装行为。现有数据不会自动搬迁；统一版本发布和回滚仍未实现。
-
-`npm run test:install -- /opt/work_projects` 在新隔离目录执行 npm ci、全量检查、私密配置生成、默认关闭初始化、单次关闭发送调度和重复初始化拒绝验收，保留 acceptance.json。不会启用浏览器、模型或真实发送。该验收不替代线上浏览器故障演练。
-
-无法由单元测试证明：平台未来DOM稳定、跨所有账号的附件选择正确、所有未读覆盖、网络断开后的真实送达状态。详见README已知不足，部署者需在明确授权后逐项做有限真实验证。
+`npm run check` 执行类型检查和回归；监督器、公共契约额外使用 strict，平台动态字段尚有宽类型。`npm run test:install` 在隔离目录检查新安装，不连接浏览器、调用模型或发送消息。真实平台验收见 [部署说明](docs/DEPLOYMENT-ACCEPTANCE.md)。

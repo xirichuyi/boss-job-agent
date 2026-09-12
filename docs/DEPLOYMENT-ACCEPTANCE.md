@@ -1,6 +1,6 @@
 # 复现已有工作流程：部署与验收
 
-目标是复现“定时刷岗 → 读 JD → 根据本人资料沟通 → 回复 HR → 异常恢复”，不是重新设计业务流程。作者线上旧目录与本仓库尚未完成统一部署，不能把作者的服务状态当成本仓库的验收结果。
+部署流程：配置和简历 → 浏览器扫码 → 单轮真实验收 → 常驻运行。每个账号需要独立验收，不能沿用作者账号的测试结果。
 
 ## 一套完整目录、一套运行身份
 
@@ -8,7 +8,7 @@
 
 以同一个非 root 服务用户完成安装、Codex 登录、配置、初始化和常驻运行。浏览器独立用户也可以，但目录权限和本地 CDP 可达性须另行验证。不要复制作者的登录态、令牌或账本。Codex 是子进程调用，不依赖一直打开的交互会话或 tmux。
 
-按 README 执行 setup/init/profile/browser/doctor；doctor 不验证模型额度、附件或送达。agent.json 中 codex.binary 和 browser.binary 推荐填本机实际可执行文件的绝对路径；systemd 不加载交互 shell 的 PATH。Node.js 使用模板中的绝对路径。启动包装器若使用 `/usr/bin/env node`，仍须为服务显式设置正确 PATH。
+按 README 用 onboard 初始化新目录，再完成 browser/doctor。已有安装不要 onboard 或 init。doctor 不验证模型额度、附件或送达。agent.json 中 codex.binary 和 browser.binary 填本机可执行文件绝对路径；systemd 不加载交互 shell 的 PATH。Node.js 使用模板中的绝对路径，浏览器启动器也需配置正确 PATH。
 
 ## 流程对应与验收证据
 

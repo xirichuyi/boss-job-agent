@@ -6,7 +6,13 @@
     "commandTimeoutMs": 20000,
     "apiReadTimeoutMs": 12000,
     "navigationChecks": 10,
-    "navigationPollMs": 500
+    "navigationPollMs": 500,
+    "viewTimeoutMs": 20000,
+    "viewPollMs": 700,
+    "contactSearchDelayMs": 1200,
+    "conversationScrollDelayMs": 500,
+    "controlTimeoutMs": 5000,
+    "receiptTimeoutMs": 25000
   },
   "telegram": {
     "pollMs": 3000,

@@ -95,6 +95,8 @@ test("native list expression compiles and does not navigate", async () => {
 test("send waits until button enabled before persisting send attempt", async () => {
   const b = new VisibleTools(),
     order = [];
+  b.settings.controlTimeoutMs = 5432;
+  b.settings.receiptTimeoutMs = 23456;
   const history = { messages: [{ text: "送达 hi", self: true }] };
   b.openConversation = async () => history;
   b.evaluate = async (expression) => {
@@ -105,8 +107,9 @@ test("send waits until button enabled before persisting send attempt", async () 
   b.call = async () => {
     order.push("insert");
   };
-  b.until = async (expression) => {
+  b.until = async (expression, timeout) => {
     new vm.Script(expression);
+    assert.equal(timeout, expression.includes("confirmedAt") ? 23456 : 5432);
     order.push("wait");
     return { text: "送达" };
   };

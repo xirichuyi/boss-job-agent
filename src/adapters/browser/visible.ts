@@ -1,3 +1,4 @@
+import { chatHistoryExpression } from "./chat-history.ts";
 import { AGENT } from "../../config/agent.ts";
 import { detailViewExpression } from "./detail-view.ts";
 import {
@@ -184,13 +185,15 @@ export class VisibleTools extends BossTools {
     )
       throw new Error("需要人工登录或验证");
   }
-  async until(expression, timeout = 20000) {
+  async until(expression, timeout = this.settings.viewTimeoutMs) {
     const deadline = Date.now() + timeout;
     do {
       await this.guard();
       const result = await this.evaluate(expression);
       if (result) return result;
-      await new Promise((resolve) => setTimeout(resolve, 700));
+      await new Promise((resolve) =>
+        setTimeout(resolve, this.settings.viewPollMs),
+      );
     } while (Date.now() < deadline);
     throw new Error("页面内容未就绪；未刷新或重复导航");
   }
@@ -417,7 +420,7 @@ export class VisibleTools extends BossTools {
     await this.evaluate(
       `(()=>{const e=document.querySelector('.boss-search-input');e.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,${JSON.stringify(company)});e.dispatchEvent(new Event('input',{bubbles:true}));return true})()`,
     );
-    await new Promise((r) => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, this.settings.contactSearchDelayMs));
     return this.until(
       `(()=>{const e=document.querySelector('.boss-search-result'),state=document.querySelector('.boss-search-container')?.parentElement?.__vue__;if(!e||!state||state.content!==${JSON.stringify(company)}||state.loading||(!e.innerText.trim()&&!e.querySelector('.no-search-data')))return null;return {query:${JSON.stringify(company)},text:e.innerText,empty:!!e.querySelector('.no-search-data'),scope:'平台近30天联系人搜索'}})()`,
     );
@@ -440,7 +443,9 @@ export class VisibleTools extends BossTools {
       page < loadJobFilters().conversationPages && Date.now() < deadline;
       page++
     ) {
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) =>
+        setTimeout(r, this.settings.conversationScrollDelayMs),
+      );
       await this.guard();
       const rows = await this.evaluate(
         `[...document.querySelectorAll('li[role="listitem"]')].map(e=>({label:e.querySelector('.name-box')?.innerText||'',recruiter:e.querySelector('.name-text')?.textContent.trim(),unread:!!e.querySelector('.notice-badge')})).filter(e=>e.label&&e.recruiter)`,
@@ -495,14 +500,14 @@ export class VisibleTools extends BossTools {
       }
     }
     if (!opened) {
-      await this.until(expression, 5000);
+      await this.until(expression, this.settings.controlTimeoutMs);
       await this.evaluate(
         `(()=>{const rows=[...document.querySelectorAll('li[role="listitem"]')].filter(e=>e.querySelector('.name-box')?.innerText.includes(${JSON.stringify(job.company)})&&e.querySelector('.name-text')?.textContent.trim()===${JSON.stringify(job.recruiter)});if(rows.length!==1)throw Error('联系人不唯一');rows[0].querySelector('.friend-content').click();return true})()`,
       );
     }
     try {
       return await this.until(
-        `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;return {text:c.innerText,messages:[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))}})()`,
+        `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;return {text:c.innerText,messages:${chatHistoryExpression}}})()`,
       );
     } catch (error) {
       if (error.message !== "页面内容未就绪；未刷新或重复导航") throw error;
@@ -542,16 +547,16 @@ export class VisibleTools extends BossTools {
     if (!populated) await this.call("Input.insertText", { text: message });
     await this.until(
       `(()=>{const b=document.querySelector('.chat-conversation .btn-send');return b&&!b.disabled&&!b.classList.contains('disabled')?true:null})()`,
-      5000,
+      this.settings.controlTimeoutMs,
     );
     await this.guard();
     persistAttempt();
     await this.evaluate(
-      `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)}||c.querySelector('.chat-input')?.innerText!==${JSON.stringify(message)})throw Error('发送目标或输入变化');const m=[...c.querySelectorAll('.message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}));if(JSON.stringify(m)!==${JSON.stringify(JSON.stringify(before.messages))})throw Error('发送前历史变化');const b=c.querySelector('.btn-send');if(!b||b.classList.contains('disabled'))throw Error('发送按钮不可用');b.click();return true})()`,
+      `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)}||c.querySelector('.chat-input')?.innerText!==${JSON.stringify(message)})throw Error('发送目标或输入变化');const m=${chatHistoryExpression};if(JSON.stringify(m)!==${JSON.stringify(JSON.stringify(before.messages))})throw Error('发送前历史变化');const b=c.querySelector('.btn-send');if(!b||b.classList.contains('disabled'))throw Error('发送按钮不可用');b.click();return true})()`,
     );
     return this.until(
       `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;const m=[...c.querySelectorAll('.message-item.item-myself')].filter(e=>e.innerText.includes(${JSON.stringify(message)}));return m.length===1&&/送达|已读/.test(m[0].innerText)?{text:m[0].innerText,confirmedAt:new Date().toISOString()}:null})()`,
-      25000,
+      this.settings.receiptTimeoutMs,
     );
   }
   async sendResume(job, filename, before, persistAttempt) {
@@ -568,7 +573,7 @@ export class VisibleTools extends BossTools {
       )
     )
       throw Error("平台已有附件记录，禁止重复发送");
-    const historyExpression = `[...document.querySelectorAll('.chat-conversation .message-item')].map(e=>({text:e.innerText,self:e.classList.contains('item-myself'),system:e.classList.contains('item-system'),id:e.getAttribute('data-mid')}))`;
+    const historyExpression = chatHistoryExpression;
     let openedDialog = false;
     await this.evaluate(finishClosingResumeDialogExpression);
     try {
@@ -598,7 +603,7 @@ export class VisibleTools extends BossTools {
       const ids = before.messages.map((m) => m.id);
       return await this.until(
         `(()=>{const c=document.querySelector('.chat-conversation');if(!${conversationIdentityExpression(job)})return null;const r=[...c.querySelectorAll('.message-item.item-system')].find(e=>!${JSON.stringify(ids)}.includes(e.getAttribute('data-mid'))&&(e.innerText.includes('您的附件简历')&&e.innerText.includes('已发送给Boss')));return r?{kind:'attachment',filename:${JSON.stringify(filename)},id:r.getAttribute('data-mid'),text:r.innerText,confirmedAt:new Date().toISOString()}:null})()`,
-        25000,
+        this.settings.receiptTimeoutMs,
       );
     } finally {
       if (openedDialog) {

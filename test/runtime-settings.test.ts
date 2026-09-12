@@ -15,6 +15,8 @@ import { executionConfig } from "../src/runtime/coordinator.ts";
 test("old configs retain defaults; malformed settings fail clearly", () => {
   assert.equal(validateTelegramSettings().pollMs, 3000);
   assert.equal(validateBrowserRuntime().commandTimeoutMs, 20000);
+  assert.equal(validateBrowserRuntime().receiptTimeoutMs, 25000);
+  assert.equal(validateBrowserRuntime({ viewPollMs: 100 }).viewPollMs, 100);
   for (const invalid of [
     null,
     [],
@@ -34,6 +36,8 @@ test("old configs retain defaults; malformed settings fail clearly", () => {
     { navigationChecks: 101 },
     { connectTimeoutMs: -1 },
     { typo: 1 },
+    { receiptTimeoutMs: 0 },
+    { viewPollMs: "700" },
   ])
     assert.throws(() => validateBrowserRuntime(invalid));
 });

@@ -1,15 +1,29 @@
 import fs from "node:fs";
 import { configFile } from "./files.ts";
 
-const defaults = {
-  discoveryTimeoutMs: 5000,
-  connectTimeoutMs: 5000,
-  commandTimeoutMs: 20000,
-  apiReadTimeoutMs: 12000,
-  navigationChecks: 10,
-  navigationPollMs: 500,
-};
-export type BrowserRuntimeSettings = typeof defaults;
+export interface BrowserRuntimeSettings {
+  discoveryTimeoutMs: number;
+  connectTimeoutMs: number;
+  commandTimeoutMs: number;
+  apiReadTimeoutMs: number;
+  navigationChecks: number;
+  navigationPollMs: number;
+  viewTimeoutMs: number;
+  viewPollMs: number;
+  contactSearchDelayMs: number;
+  conversationScrollDelayMs: number;
+  controlTimeoutMs: number;
+  receiptTimeoutMs: number;
+}
+// One shipped defaults file; private/older configs override only supplied keys.
+const defaults: BrowserRuntimeSettings = Object.freeze(
+  JSON.parse(
+    fs.readFileSync(
+      new URL("../../config/execution.json", import.meta.url),
+      "utf8",
+    ),
+  ).browser,
+);
 export function validateBrowserRuntime(
   value: unknown = {},
 ): BrowserRuntimeSettings {

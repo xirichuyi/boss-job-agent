@@ -11,6 +11,8 @@ export function planSetup(answers) {
     "resumeFile",
     "model",
     "reasoningEffort",
+    "browserBinary",
+    "codexBinary",
   ];
   if (
     !answers ||
@@ -28,15 +30,29 @@ export function planSetup(answers) {
     ]),
   );
   const catalog = files["job-filters"].cities;
-  const names = answers.cities || catalog.map((c) => c.name);
+  const choices = answers.cities || catalog.map((c) => c.name);
+  const cities = Array.isArray(choices)
+    ? choices.map((city) =>
+        typeof city === "string" ? catalog.find((c) => c.name === city) : city,
+      )
+    : [];
   if (
-    !Array.isArray(names) ||
-    !names.length ||
-    new Set(names).size !== names.length ||
-    names.some((n) => !catalog.some((c) => c.name === n))
+    !cities.length ||
+    cities.some(
+      (city) =>
+        !city ||
+        typeof city !== "object" ||
+        Object.keys(city).some((key) => !["name", "code"].includes(key)) ||
+        typeof city.name !== "string" ||
+        !city.name.trim() ||
+        typeof city.code !== "string" ||
+        !/^\d{9}$/.test(city.code),
+    ) ||
+    new Set(cities.map((c) => c.name)).size !== cities.length ||
+    new Set(cities.map((c) => c.code)).size !== cities.length
   )
     throw Error(
-      "请选择城市列表中的名称；自定义城市可在生成后配置并验证平台编码",
+      "城市需填写已知名称，或 {name, code}；编码为平台9位城市码，不可重复",
     );
   const min =
     answers.minimumMonthlySalaryK ?? files["job-filters"].minimumMonthlySalaryK;
@@ -71,7 +87,7 @@ export function planSetup(answers) {
     )
   )
     throw Error("模型或推理强度无效");
-  files["job-filters"].cities = catalog.filter((c) => names.includes(c.name));
+  files["job-filters"].cities = cities;
   files["job-filters"].minimumMonthlySalaryK = min;
   // Include all bands intersecting the lower-bound requirement, then verify exact salary locally.
   files["job-filters"].nativeSalaryCodes = [
@@ -89,6 +105,19 @@ export function planSetup(answers) {
   files.agent.search.keywords = words;
   files.agent.resumeFile = resume;
   files.agent.schedule.perRun = 1;
+  for (const [answer, section] of [
+    ["browserBinary", "browser"],
+    ["codexBinary", "codex"],
+  ]) {
+    if (answers[answer] === undefined) continue;
+    if (
+      typeof answers[answer] !== "string" ||
+      !path.isAbsolute(answers[answer]) ||
+      /[\r\n]/.test(answers[answer])
+    )
+      throw Error(answer + " 必须是可执行文件的绝对路径");
+    files.agent[section].binary = answers[answer];
+  }
   files.model = { model, reasoningEffort: effort };
   return files;
 }
