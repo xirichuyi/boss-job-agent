@@ -20,6 +20,8 @@ export function businessHealth(
     reasons.push("多个联系人仍在失败退避中");
   if (inbox.processingFailed) reasons.push("回复或附件处理失败");
   if (s.contactFailures?.length) reasons.push("首次联系失败");
+  if (s.preflightFailures?.length) reasons.push("联系前读取失败");
+  if (s.searchWarning) reasons.push("搜索分支异常");
   if (cycle.status === "blocked") reasons.push("执行周期受阻");
   if ((s.reasons?.["详情读取失败"] || 0) >= policy.minReadFailures)
     reasons.push("岗位详情读取失败");

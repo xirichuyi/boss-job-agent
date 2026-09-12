@@ -4,6 +4,7 @@ import { AGENT } from "../config/agent.ts";
 import { pendingWrite } from "./reconcile.ts";
 import { hardReject } from "./job-policy.ts";
 import { classifyFailure } from "../domain/recovery.ts";
+import { stopAll } from "./inbox-retry.ts";
 export async function contactJobs({
   root,
   list,
@@ -19,6 +20,24 @@ export async function contactJobs({
   withChat = (task) => task(),
   deadline = Infinity,
 }) {
+  // Only pre-send transient reads may be isolated. No write retry happens here.
+  const preflight = async (job, stage, task) => {
+    try {
+      return { ok: true, value: await task() };
+    } catch (error) {
+      if (stopAll(error) || classifyFailure(error.message) !== "transient")
+        throw error;
+      job.rejected = `联系前读取失败（${stage}），未发送：${error.message}`;
+      report.preflightFailures ||= [];
+      report.preflightFailures.push({
+        jobId: job.id,
+        stage,
+        reason: error.message,
+      });
+      save();
+      return { ok: false, value: undefined };
+    }
+  };
   const priorDetails = report.jobReviews.filter((j) => j.text).length;
   const candidates = [];
   const batchLimit = Math.min(
@@ -66,7 +85,8 @@ export async function contactJobs({
     try {
       detail = await jobs.detail(card.id);
     } catch (error) {
-      if (classifyFailure(error.message) !== "transient") throw error;
+      if (stopAll(error) || classifyFailure(error.message) !== "transient")
+        throw error;
       report.jobReviews.push({
         ...card,
         rejected: "本轮详情读取失败，未发送：" + error.message,
@@ -88,12 +108,26 @@ export async function contactJobs({
       save();
       continue;
     }
-    if (!(await jobs.contactReady(job))) {
+    const ready = await preflight(job, "contact_ready", () =>
+      jobs.contactReady(job),
+    );
+    if (!ready.ok) {
+      if (candidates.length) break;
+      continue;
+    }
+    if (!ready.value) {
       job.rejected = "平台沟通按钮不可用，未点击";
       save();
       continue;
     }
-    const history = await chat.searchHistory(job.company);
+    const checked = await preflight(job, "company_history", () =>
+      chat.searchHistory(job.company),
+    );
+    if (!checked.ok) {
+      if (candidates.length) break;
+      continue;
+    }
+    const history = checked.value;
     job.historyCheck = history;
     save();
     if (!history.empty) {
@@ -131,7 +165,11 @@ export async function contactJobs({
       continue;
     }
     // Revalidate selected JD immediately before a write; never navigate by guessed URL.
-    const current = await jobs.detail(job.id);
+    const refreshed = await preflight(job, "refresh_jd", () =>
+      jobs.detail(job.id),
+    );
+    if (!refreshed.ok) continue;
+    const current = refreshed.value;
     const freshRejection = hardReject({ ...job, ...current });
     if (freshRejection) {
       job.rejected = freshRejection;
@@ -141,9 +179,16 @@ export async function contactJobs({
     if (
       current.text.split("职位描述")[1]?.split(job.recruiter)[0] !==
       job.text.split("职位描述")[1]?.split(job.recruiter)[0]
-    )
-      throw new Error("发送前JD变化，需要重新匹配");
-    if (!(await jobs.contactReady(job))) {
+    ) {
+      job.rejected = "发送前JD变化，需要重新匹配，未发送";
+      save();
+      continue;
+    }
+    const currentReady = await preflight(job, "refresh_contact_ready", () =>
+      jobs.contactReady(job),
+    );
+    if (!currentReady.ok) continue;
+    if (!currentReady.value) {
       job.rejected = "平台沟通按钮不可用，未点击；后续轮次可重新检查";
       save();
       continue;
@@ -233,13 +278,18 @@ export async function contactJobs({
         save();
       });
     } catch (error) {
-      if (["TASK_PAUSED", "LEASE_LOST"].includes(error.code)) throw error;
-      if (classifyFailure(error.message) === "authentication") throw error;
+      if (stopAll(error)) throw error;
       const failed = ledger.contacts.find(
         (e) => e.cycle === cycle.id && e.job.id === job.id,
       );
       if (!failed) {
         job.rejected = "联系前读取失败，留待下轮：" + error.message;
+        report.preflightFailures ||= [];
+        report.preflightFailures.push({
+          jobId: job.id,
+          stage: "final_company_history",
+          reason: error.message,
+        });
         save();
         continue;
       }

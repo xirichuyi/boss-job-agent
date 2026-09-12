@@ -17,6 +17,11 @@ export function summarizeCycle(report) {
     reasons[category] = (reasons[category] || 0) + 1;
   }
   const sent = report.result?.messagesSent || 0;
+  const warning = report.searchWarning
+    ? `搜索异常：${report.searchWarning}`
+    : report.preflightFailures?.length
+      ? `${report.preflightFailures.length}个岗位联系前读取失败，已隔离`
+      : "";
   return {
     listCount: report.listCount || 0,
     reviewed: (report.jobReviews || []).length,
@@ -28,13 +33,17 @@ export function summarizeCycle(report) {
         : sent
           ? "messages_confirmed"
           : "completed_no_send",
-    explanation: sent
-      ? `已确认发送${sent}条消息`
-      : report.status === "blocked"
-        ? `未确认新消息，执行异常：${report.reason}`
-        : reasons["详情读取失败"]
-          ? `本轮结束但未发送：${reasons["详情读取失败"]}次岗位详情读取失败；其他岗位可能被筛选或防重跳过，需检查读取链路。`
-          : "本轮执行完成但未发送：岗位被筛选/防重跳过，或没有可自动回复的新消息。",
+    explanation:
+      (sent
+        ? `已确认发送${sent}条消息`
+        : report.status === "blocked"
+          ? `未确认新消息，执行异常：${report.reason}`
+          : reasons["详情读取失败"]
+            ? `本轮结束但未发送：${reasons["详情读取失败"]}次岗位详情读取失败；其他岗位可能被筛选或防重跳过，需检查读取链路。`
+            : "本轮执行完成但未发送：岗位被筛选/防重跳过，或没有可自动回复的新消息。") +
+      (warning ? "；" + warning : ""),
+    searchWarning: report.searchWarning || null,
+    preflightFailures: report.preflightFailures || [],
     inbox: report.inboxSummary || {},
     inboxFailures: report.inboxFailures || [],
     inboxDiscovery: report.inboxDiscovery || {},
