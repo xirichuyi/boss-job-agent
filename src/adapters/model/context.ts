@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { createHash } from "node:crypto";
 import { readState } from "../../storage/harness.ts";
 export const digest = (text) => createHash("sha256").update(text).digest("hex");
-export function profileContext(root) {
+function baseProfileContext(root) {
   const platform = readState(root + "/memory/platform-profile.json");
   const local = fs.readFileSync(root + "/candidate-profile.md", "utf8");
   const manifest = readState(root + "/memory/candidate-context-source.json");
@@ -29,6 +29,25 @@ export function profileContext(root) {
         text: platform.text,
       }
     : { source: "local_only", text: local };
+}
+export function profileContext(root) {
+  const profile = baseProfileContext(root);
+  const file = root + "/memory/candidate-projects.json";
+  if (!fs.existsSync(file)) return profile;
+  const knowledge = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (
+    !knowledge ||
+    typeof knowledge.source !== "string" ||
+    !Array.isArray(knowledge.projects) ||
+    knowledge.projects.length > 40 ||
+    knowledge.projects.some(
+      (p) =>
+        !p || typeof p.name !== "string" || typeof p.description !== "string",
+    ) ||
+    JSON.stringify(knowledge).length > 16000
+  )
+    throw Error("项目资料库格式无效或超过容量，请整理后重试");
+  return { ...profile, projectKnowledge: knowledge };
 }
 export function jobContext(job) {
   return {

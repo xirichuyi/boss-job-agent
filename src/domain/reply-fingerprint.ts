@@ -7,10 +7,15 @@ export function replyFingerprint(
   profile: string,
   replyPrompt: string,
   commonPrompt: string,
+  effectiveProfile = "",
 ): string {
   return createHash("sha256")
     .update(
-      JSON.stringify(history.messages) + profile + replyPrompt + commonPrompt,
+      JSON.stringify(history.messages) +
+        profile +
+        replyPrompt +
+        commonPrompt +
+        effectiveProfile,
     )
     .digest("hex");
 }

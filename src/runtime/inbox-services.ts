@@ -4,6 +4,7 @@ import { rejectJobFilters } from "../config/job-filters.ts";
 import { replyFingerprint } from "../domain/reply-fingerprint.ts";
 import type { InboxServices } from "../domain/contracts.ts";
 import { raiseAlert } from "../storage/alerts.ts";
+import { profileContext } from "../adapters/model/context.ts";
 
 /** Bind deployment-specific resources without caching editable profile/prompts. */
 export function createInboxServices(root: string): InboxServices {
@@ -26,6 +27,7 @@ export function createInboxServices(root: string): InboxServices {
           new URL("../../prompts/common.md", import.meta.url),
           "utf8",
         ),
+        JSON.stringify(profileContext(root)),
       ),
   };
 }

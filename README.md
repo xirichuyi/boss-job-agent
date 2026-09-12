@@ -108,6 +108,8 @@ node scripts/scheduler.ts --once
 | candidate-profile.md | 本人资料，私密、不提交 |
 | memory/ | SQLite账本、回执、日志和可选Telegram配置，私密、不提交 |
 
+可选项目补充资料：数据目录 `memory/candidate-projects.json`，包含 `source` 和 `projects` 数组，每项至少 `name`、`description`，可附 `url`、`shareDirectLink`。最多40项、16000个JSON字符，需人工核实来源和开发职责。资料会随平台履历或简历摘要一起传给模型，不覆盖平台经历；更新后旧回复草稿会因上下文变化失效。不要存入凭据或不应外发的服务入口，公开网址也不等于可擅自声称原创。
+
 旧 `BOSS_AGENT_CONFIG`、`BOSS_JOB_FILTERS_CONFIG` 单文件覆盖仍兼容，优先于目录；doctor 会提示弃用字段。旧 agent.search.city/cityCode 与 workflow.conversationPages 不再是生效来源。不要在状态JSON里修改偏好。
 
 默认轮换杭州、深圳、成都、南京，产品/开发方向，500人以上、月薪区间下限至少11K、非实习。城市会通过原生热门/字母分组选项定位，核对API响应城市码；未知编码需人工验证，不猜测。
