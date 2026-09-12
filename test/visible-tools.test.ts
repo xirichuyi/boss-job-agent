@@ -133,3 +133,35 @@ test("changed history prevents sending", async () => {
   );
   assert.equal(attempted, false);
 });
+
+test("contact search rejects stale query/loading and accepts a textless empty result", async () => {
+  const b = new VisibleTools();
+  b.evaluate = async () => true;
+  let calls = 0;
+  b.until = async (expression) => {
+    if (++calls === 1) return true;
+    const state = { content: "旧公司", loading: false };
+    let empty = false;
+    const result = { innerText: "", querySelector: () => (empty ? {} : null) };
+    const evaluate = () =>
+      vm.runInNewContext(expression, {
+        document: {
+          querySelector: (s) =>
+            s === ".boss-search-result"
+              ? result
+              : { parentElement: { __vue__: state } },
+        },
+      });
+    assert.equal(evaluate(), null);
+    state.content = "新公司";
+    state.loading = true;
+    result.innerText = "旧结果";
+    assert.equal(evaluate(), null);
+    state.loading = false;
+    result.innerText = "";
+    empty = true;
+    assert.equal(evaluate().empty, true);
+    return { empty: true };
+  };
+  assert.equal((await b.searchHistory("新公司")).empty, true);
+});

@@ -419,7 +419,7 @@ export class VisibleTools extends BossTools {
     );
     await new Promise((r) => setTimeout(r, 1200));
     return this.until(
-      `(()=>{const e=document.querySelector('.boss-search-result');if(!e||!e.innerText.trim())return null;return {query:${JSON.stringify(company)},text:e.innerText,empty:!!e.querySelector('.no-search-data'),scope:'平台近30天联系人搜索'}})()`,
+      `(()=>{const e=document.querySelector('.boss-search-result'),state=document.querySelector('.boss-search-container')?.parentElement?.__vue__;if(!e||!state||state.content!==${JSON.stringify(company)}||state.loading||(!e.innerText.trim()&&!e.querySelector('.no-search-data')))return null;return {query:${JSON.stringify(company)},text:e.innerText,empty:!!e.querySelector('.no-search-data'),scope:'平台近30天联系人搜索'}})()`,
     );
   }
   async clearSearch() {

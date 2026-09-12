@@ -15,7 +15,7 @@ export function conversationIdentityExpression(job): string {
     const loaded=c?.querySelector('.top-info-content')?.__vue__?.conversation$;
     const name=c?.querySelector('.top-info-content .name-text')?.textContent.trim();
     const title=c?.querySelector('.position-name')?.textContent.trim();
-    const normalize=t=>typeof t==='string'?t.replace(/（代招职位）$/, '').trim():'';
+    const normalize=t=>typeof t==='string'?t.replace(/（(?:代招|猎头)职位）$/, '').trim():'';
     return !!(expected.id&&expected.recruiter&&expected.company&&expected.title&&
       selected?.encryptJobId===expected.id&&loaded?.encryptJobId===expected.id&&
       selected.encryptBossId&&selected.encryptBossId===loaded.encryptBossId&&

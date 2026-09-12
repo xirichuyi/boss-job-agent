@@ -40,6 +40,13 @@ test("native contact and loaded job IDs bind agency chats without company in hea
       document: { querySelector: () => chat },
     });
   assert.equal(verify(), true);
+  loaded.jobName = "产品经理（猎头职位）";
+  assert.equal(
+    verify(),
+    true,
+    "platform agency labels are not part of the job title",
+  );
+  loaded.jobName = "产品经理（代招职位）";
   for (const [target, key, value] of [
     [selected, "encryptJobId", "other"],
     [loaded, "encryptJobId", "other"],
